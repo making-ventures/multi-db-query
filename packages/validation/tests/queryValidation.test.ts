@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { MetadataIndex } from '../src/metadataIndex.js'
-import { validateQuery } from '../src/queryValidation.js'
 import type { ExecutionContext } from '../src/types/context.js'
 import type { MetadataConfig, RoleMeta } from '../src/types/metadata.js'
 import type { QueryDefinition } from '../src/types/query.js'
+import { validateQuery } from '../src/validation/queryValidator.js'
 import { eventsTable, ordersTable, usersTable, validConfig } from './fixtures/testConfig.js'
 
 // --- Helpers ---
@@ -385,7 +385,7 @@ describe('Rule 6 — Join validity', () => {
     const idx = buildIndex()
     const q: QueryDefinition = {
       from: 'users',
-      joins: [{ table: 'events' }],
+      joins: [{ table: 'metrics' }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).not.toBeNull()
@@ -693,7 +693,7 @@ describe('Rule 12 — Exists filter validity', () => {
     const idx = buildIndex()
     const q: QueryDefinition = {
       from: 'users',
-      filters: [{ table: 'events', exists: true }],
+      filters: [{ table: 'metrics', exists: true }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).not.toBeNull()

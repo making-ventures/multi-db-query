@@ -296,6 +296,37 @@ describe('Pipeline — cache', () => {
       }),
     ).rejects.toThrow(ExecutionError)
   })
+
+  it('#10: partial cache hit — cached + direct merge', async () => {
+    // IDs 1,2 in cache; ID 3 miss → query DB for ID 3 only, merge results
+    const cacheData = new Map<string, Record<string, unknown> | null>([
+      ['user:1', { id: '1', name: 'Alice', email: 'alice@test.com' }],
+      ['user:2', { id: '2', name: 'Bob', email: 'bob@test.com' }],
+    ])
+
+    const db = await createMultiDb({
+      metadataProvider: staticMetadata(configWithCache),
+      roleProvider: staticRoles(roles),
+      executors: { 'pg-main': mockExecutor([{ id: '3', name: 'Charlie', email: 'charlie@test.com' }]) },
+      cacheProviders: { 'redis-main': mockCache(cacheData) },
+    })
+
+    const result = await db.query({
+      definition: { from: 'users', byIds: ['1', '2', '3'] },
+      context: adminCtx,
+    })
+
+    expect(result.kind).toBe('data')
+    if (result.kind === 'data') {
+      expect(result.data).toHaveLength(3)
+      expect(result.meta.strategy).toBe('cache')
+      // Verify all 3 rows present (2 from cache + 1 from DB)
+      const names = result.data.map((r) => (r as Record<string, unknown>).name)
+      expect(names).toContain('Alice')
+      expect(names).toContain('Bob')
+      expect(names).toContain('Charlie')
+    }
+  })
 })
 
 describe('Pipeline — error paths', () => {

@@ -1,6 +1,6 @@
 import type { CachedTableMeta, DatabaseEngine, QueryDefinition, TableMeta } from '@mkven/multi-db-validation'
 import { PlannerError } from '@mkven/multi-db-validation'
-import type { RegistrySnapshot } from './metadataRegistry.js'
+import type { RegistrySnapshot } from '../metadata/registry.js'
 
 // --- Types ---
 

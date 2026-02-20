@@ -10,8 +10,8 @@ import type {
   RoleMeta,
   TableMeta,
 } from '@mkven/multi-db-validation'
-import type { EffectiveTableAccess } from './accessControl.js'
-import { resolveTableAccess } from './accessControl.js'
+import type { EffectiveTableAccess } from '../access/access.js'
+import { resolveTableAccess } from '../access/access.js'
 import type {
   AggregationClause,
   ColumnMapping,
@@ -23,7 +23,7 @@ import type {
   SqlParts,
   TableRef,
   WhereNode,
-} from './types/ir.js'
+} from '../types/ir.js'
 
 // --- Result ---
 

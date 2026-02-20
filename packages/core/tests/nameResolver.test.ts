@@ -1,7 +1,7 @@
 import type { ExecutionContext, MetadataConfig, QueryDefinition, RoleMeta, TableMeta } from '@mkven/multi-db-validation'
 import { MetadataIndex } from '@mkven/multi-db-validation'
 import { describe, expect, it } from 'vitest'
-import { resolveNames } from '../src/nameResolver.js'
+import { resolveNames } from '../src/resolution/resolver.js'
 
 // --- Fixtures ---
 

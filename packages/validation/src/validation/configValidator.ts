@@ -1,6 +1,6 @@
-import type { ConfigErrorEntry } from './errors.js'
-import { ConfigError } from './errors.js'
-import type { MetadataConfig, TableMeta } from './types/metadata.js'
+import type { ConfigErrorEntry } from '../errors.js'
+import { ConfigError } from '../errors.js'
+import type { MetadataConfig, TableMeta } from '../types/metadata.js'
 
 // --- Reserved Words ---
 

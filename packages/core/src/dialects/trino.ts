@@ -224,7 +224,7 @@ class TrinoGenerator {
 
   // WhereCountedSubquery
   private whereCounted(c: WhereCountedSubquery): string {
-    return `(${this.countSubquery(c.subquery)}) ${c.operator} ${this.ref(c.countParamIndex)}`
+    return `(${this.countSubquery(c.subquery, c.operator, c.countParamIndex)}) ${c.operator} ${this.ref(c.countParamIndex)}`
   }
 
   // --- Subquery ---
@@ -237,12 +237,33 @@ class TrinoGenerator {
     return sql
   }
 
-  private countSubquery(sub: CorrelatedSubquery): string {
+  private countSubquery(
+    sub: CorrelatedSubquery,
+    operator?: string | undefined,
+    countParamIndex?: number | undefined,
+  ): string {
+    const limit = this.countLimit(operator, countParamIndex)
+    if (limit !== undefined) {
+      let inner = `SELECT 1 FROM ${quoteTable(sub.from)} WHERE ${quoteCol(sub.join.leftColumn)} = ${quoteCol(sub.join.rightColumn)}`
+      if (sub.where !== undefined) {
+        inner += ` AND ${this.whereNode(sub.where)}`
+      }
+      inner += ` LIMIT ${String(limit)}`
+      return `SELECT COUNT(*) FROM (${inner}) AS "_c"`
+    }
     let sql = `SELECT COUNT(*) FROM ${quoteTable(sub.from)} WHERE ${quoteCol(sub.join.leftColumn)} = ${quoteCol(sub.join.rightColumn)}`
     if (sub.where !== undefined) {
       sql += ` AND ${this.whereNode(sub.where)}`
     }
     return sql
+  }
+
+  private countLimit(operator: string | undefined, countParamIndex: number | undefined): number | undefined {
+    if (operator === undefined || countParamIndex === undefined) return undefined
+    if (operator !== '>=' && operator !== '>') return undefined
+    const value = this.input[countParamIndex]
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return undefined
+    return operator === '>=' ? value : value + 1
   }
 
   // --- HAVING ---

@@ -473,7 +473,7 @@ describe('PostgresDialect — WHERE counted subquery', () => {
     }
     const { sql, params } = dialect.generate(base({ where: cond }), [5])
     expect(sql).toContain(
-      'WHERE (SELECT COUNT(*) FROM "public"."orders" AS "s0" WHERE "t0"."id" = "s0"."user_id") >= $1',
+      'WHERE (SELECT COUNT(*) FROM (SELECT 1 FROM "public"."orders" AS "s0" WHERE "t0"."id" = "s0"."user_id" LIMIT 5) AS "_c") >= $1',
     )
     expect(params).toEqual([5])
   })

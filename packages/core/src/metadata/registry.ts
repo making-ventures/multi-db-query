@@ -7,7 +7,7 @@ import type {
   TableMeta,
 } from '@mkven/multi-db-validation'
 import { MetadataIndex, ProviderError, validateConfig } from '@mkven/multi-db-validation'
-import type { MetadataProvider, RoleProvider } from './types/providers.js'
+import type { MetadataProvider, RoleProvider } from '../types/providers.js'
 
 /**
  * Database connectivity edge: two databases are connected if

@@ -8,17 +8,17 @@ import type {
 } from '@mkven/multi-db-validation'
 import { ConnectionError, ExecutionError, validateQuery } from '@mkven/multi-db-validation'
 
-import type { EffectiveColumn } from './accessControl.js'
-import { maskRows, resolveTableAccess } from './accessControl.js'
+import type { EffectiveColumn } from './access/access.js'
+import { maskRows, resolveTableAccess } from './access/access.js'
 import { ClickHouseDialect } from './dialects/clickhouse.js'
 import { PostgresDialect } from './dialects/postgres.js'
 import { TrinoDialect } from './dialects/trino.js'
-import type { RegistrySnapshot } from './metadataRegistry.js'
-import { MetadataRegistry } from './metadataRegistry.js'
-import type { ResolveResult } from './nameResolver.js'
-import { resolveNames } from './nameResolver.js'
-import type { CachePlan, DialectName, MaterializedPlan, QueryPlan, TrinoPlan } from './planner.js'
-import { planQuery } from './planner.js'
+import type { RegistrySnapshot } from './metadata/registry.js'
+import { MetadataRegistry } from './metadata/registry.js'
+import type { CachePlan, DialectName, MaterializedPlan, QueryPlan, TrinoPlan } from './planner/planner.js'
+import { planQuery } from './planner/planner.js'
+import type { ResolveResult } from './resolution/resolver.js'
+import { resolveNames } from './resolution/resolver.js'
 import type { CacheProvider, DbExecutor } from './types/interfaces.js'
 import type { SqlDialect, SqlParts } from './types/ir.js'
 import type { MetadataProvider, RoleProvider } from './types/providers.js'
@@ -34,7 +34,7 @@ export interface CreateMultiDbOptions {
 }
 
 export interface MultiDb {
-  query(input: { definition: QueryDefinition; context: ExecutionContext }): Promise<QueryResult>
+  query<T = unknown>(input: { definition: QueryDefinition; context: ExecutionContext }): Promise<QueryResult<T>>
   reloadMetadata(): Promise<void>
   reloadRoles(): Promise<void>
   healthCheck(): Promise<HealthCheckResult>
@@ -66,11 +66,11 @@ export async function createMultiDb(options: CreateMultiDbOptions): Promise<Mult
   let closed = false
 
   return {
-    async query(input) {
+    async query<T = unknown>(input: { definition: QueryDefinition; context: ExecutionContext }) {
       if (closed) {
         throw new ExecutionError({ code: 'EXECUTOR_MISSING', database: 'closed' })
       }
-      return runQuery(input.definition, input.context, registry, executors, cacheProviders)
+      return runQuery(input.definition, input.context, registry, executors, cacheProviders) as Promise<QueryResult<T>>
     },
 
     async reloadMetadata() {
@@ -147,6 +147,7 @@ async function runQuery(
     return cachePath(
       plan,
       definition,
+      context,
       snapshot,
       cacheProviders,
       executors,
@@ -200,6 +201,7 @@ async function runQuery(
 async function cachePath(
   plan: CachePlan,
   definition: QueryDefinition,
+  context: ExecutionContext,
   snapshot: RegistrySnapshot,
   cacheProviders: Record<string, CacheProvider>,
   executors: Record<string, DbExecutor>,
@@ -231,18 +233,21 @@ async function cachePath(
 
   // Check hits
   const hits: Record<string, unknown>[] = []
-  let allHit = true
-  for (const key of keys) {
+  const missingIds: (string | number)[] = []
+  for (let i = 0; i < byIds.length; i++) {
+    const key = keys[i]
+    if (key === undefined) continue
     const val = cached.get(key)
     if (val !== null && val !== undefined) {
       hits.push(val)
     } else {
-      allHit = false
+      const id = byIds[i]
+      if (id !== undefined) missingIds.push(id)
     }
   }
 
   // Full cache hit
-  if (allHit && hits.length > 0) {
+  if (missingIds.length === 0 && hits.length > 0) {
     return finishResult(
       hits,
       resolved,
@@ -259,24 +264,38 @@ async function cachePath(
     )
   }
 
-  // Cache miss — fallback to SQL
+  // Partial cache hit — query only missing IDs from fallback DB, merge
   const executor = executors[plan.fallbackDatabase]
   if (executor === undefined) {
     throw new ExecutionError({ code: 'EXECUTOR_MISSING', database: plan.fallbackDatabase })
   }
 
+  const queryIds = missingIds.length > 0 && hits.length > 0 ? missingIds : byIds
+  const missingDef = queryIds === byIds ? definition : { ...definition, byIds: queryIds }
+  const missingResolved =
+    queryIds === byIds ? resolved : resolveNames(missingDef, context, snapshot.index, snapshot.index.rolesById)
+  const missingGen =
+    queryIds === byIds ? gen : dialectInstances[dialectName].generate(missingResolved.parts, missingResolved.params)
+
   const t5 = Date.now()
   let rows: Record<string, unknown>[]
   try {
-    rows = await executor.execute(gen.sql, gen.params)
+    rows = await executor.execute(missingGen.sql, missingGen.params)
   } catch (err) {
-    throw toExecError(err, plan.fallbackDatabase, dialectName, gen)
+    throw toExecError(err, plan.fallbackDatabase, dialectName, missingGen)
   }
   const executionMs = Date.now() - t5
-  if (debug) log.push(entry('execution', `Fallback executed (${rows.length} rows)`, executionMs))
+  if (debug && hits.length > 0) {
+    log.push(entry('execution', `Partial cache: ${hits.length} cached, ${rows.length} from DB`, executionMs))
+  } else if (debug) {
+    log.push(entry('execution', `Fallback executed (${rows.length} rows)`, executionMs))
+  }
+
+  // Merge cached hits + DB results
+  const allRows = hits.length > 0 ? [...hits, ...rows] : rows
 
   return finishResult(
-    rows,
+    allRows,
     resolved,
     definition,
     maskingMap,

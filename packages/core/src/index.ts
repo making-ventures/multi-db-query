@@ -48,23 +48,22 @@ export {
   validateQuery,
 } from '@mkven/multi-db-validation'
 // Access Control & Masking
-export type { EffectiveColumn, EffectiveTableAccess, MaskingFn } from './accessControl.js'
+export type { EffectiveColumn, EffectiveTableAccess, MaskingFn } from './access/access.js'
 export {
   applyMask,
   computeAllowedColumns,
   maskRows,
   resolveTableAccess,
-} from './accessControl.js'
+} from './access/access.js'
 // Dialects
 export { ClickHouseDialect } from './dialects/clickhouse.js'
 export { PostgresDialect } from './dialects/postgres.js'
 export { TrinoDialect } from './dialects/trino.js'
+// Static provider helpers
+export { staticMetadata, staticRoles } from './metadata/providers.js'
 // Metadata Registry
-export type { ConnectivityEdge, RegistrySnapshot } from './metadataRegistry.js'
-export { MetadataRegistry } from './metadataRegistry.js'
-// Name Resolution
-export type { ResolveResult } from './nameResolver.js'
-export { resolveNames } from './nameResolver.js'
+export type { ConnectivityEdge, RegistrySnapshot } from './metadata/registry.js'
+export { MetadataRegistry } from './metadata/registry.js'
 // Pipeline
 export type { CreateMultiDbOptions, MultiDb } from './pipeline.js'
 export { createMultiDb } from './pipeline.js'
@@ -77,10 +76,11 @@ export type {
   PlannerOptions,
   QueryPlan,
   TrinoPlan,
-} from './planner.js'
-export { planQuery } from './planner.js'
-// Static provider helpers
-export { staticMetadata, staticRoles } from './staticProviders.js'
+} from './planner/planner.js'
+export { planQuery } from './planner/planner.js'
+// Name Resolution
+export type { ResolveResult } from './resolution/resolver.js'
+export { resolveNames } from './resolution/resolver.js'
 // Public interfaces
 export type { CacheProvider, DbExecutor } from './types/interfaces.js'
 // IR types (internal)

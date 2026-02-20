@@ -1,6 +1,6 @@
 import type { ExecutionContext, RoleMeta, TableMeta } from '@mkven/multi-db-validation'
 import { describe, expect, it } from 'vitest'
-import { applyMask, computeAllowedColumns, maskRows, resolveTableAccess } from '../src/accessControl.js'
+import { applyMask, computeAllowedColumns, maskRows, resolveTableAccess } from '../src/access/access.js'
 
 // --- Fixtures ---
 

@@ -23,7 +23,7 @@ export interface MultiDbClientConfig {
 }
 
 export interface MultiDbClient {
-  query(input: { definition: QueryDefinition; context: ExecutionContext }): Promise<QueryResult>
+  query<T = unknown>(input: { definition: QueryDefinition; context: ExecutionContext }): Promise<QueryResult<T>>
   healthCheck(): Promise<HealthCheckResult>
 }
 
@@ -43,7 +43,7 @@ export function createMultiDbClient(config: MultiDbClientConfig): MultiDbClient 
   }
 
   return {
-    async query(input) {
+    async query<T = unknown>(input: { definition: QueryDefinition; context: ExecutionContext }) {
       // Optional local validation — fail fast before network round-trip
       if (validateBeforeSend && localIndex !== undefined && localRoles !== undefined) {
         const err = validateQuery(input.definition, input.context, localIndex, localRoles)
@@ -67,7 +67,7 @@ export function createMultiDbClient(config: MultiDbClientConfig): MultiDbClient 
           throw deserializeError(body)
         }
 
-        return body as unknown as QueryResult
+        return body as unknown as QueryResult<T>
       } catch (err) {
         if (err instanceof MultiDbError) throw err
         if (err instanceof Error && err.name === 'AbortError') {

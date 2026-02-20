@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 // ── QueryContract ──────────────────────────────────────────────
 
 export interface QueryContract {
-  query(input: { definition: QueryDefinition; context: ExecutionContext }): Promise<QueryResult>
+  query<T = unknown>(input: { definition: QueryDefinition; context: ExecutionContext }): Promise<QueryResult<T>>
 }
 
 // ── describeQueryContract ──────────────────────────────────────
@@ -68,6 +68,43 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         expect(result.sql).toContain('SELECT')
         expect(Array.isArray(result.params)).toBe(true)
       }
+    })
+
+    it('#220: filter + join', async () => {
+      const result = await engine.query({
+        definition: {
+          from: 'orders',
+          joins: [{ table: 'users' }],
+          filters: [{ column: 'status', operator: '=', value: 'active' }],
+        },
+        context: { roles: { user: ['admin'] } },
+      })
+      expect(result.kind).toBe('data')
+      if (result.kind === 'data') {
+        expect(result.meta.columns.length).toBeGreaterThan(0)
+      }
+    })
+
+    it('#221: aggregation', async () => {
+      const result = await engine.query({
+        definition: {
+          from: 'orders',
+          columns: ['status'],
+          groupBy: [{ column: 'status' }],
+          aggregations: [{ column: 'total', fn: 'sum', alias: 'totalSum' }],
+        },
+        context: { roles: { user: ['admin'] } },
+      })
+      expect(result.kind).toBe('data')
+    })
+
+    it('#223: access denied on restricted column', async () => {
+      await expect(
+        engine.query({
+          definition: { from: 'orders', columns: ['id', 'internalNote'] },
+          context: { roles: { user: ['restricted'] } },
+        }),
+      ).rejects.toThrow(ValidationError)
     })
   })
 }

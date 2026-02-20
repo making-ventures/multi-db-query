@@ -9,8 +9,8 @@ import type {
 } from '@mkven/multi-db-validation'
 import { MetadataIndex, PlannerError } from '@mkven/multi-db-validation'
 import { describe, expect, it } from 'vitest'
-import type { RegistrySnapshot } from '../src/metadataRegistry.js'
-import { planQuery } from '../src/planner.js'
+import type { RegistrySnapshot } from '../src/metadata/registry.js'
+import { planQuery } from '../src/planner/planner.js'
 
 // --- Fixtures ---
 
@@ -150,6 +150,14 @@ const eventsSyncToPg: ExternalSync = {
   estimatedLag: 'hours',
 }
 
+const ordersSyncToIceberg: ExternalSync = {
+  sourceTable: 'orders',
+  targetDatabase: 'iceberg-archive',
+  targetPhysicalName: 'warehouse.orders_current',
+  method: 'debezium',
+  estimatedLag: 'minutes',
+}
+
 // Cache
 const usersCache: CachedTableMeta = { tableId: 'users', keyPattern: 'user:{id}' }
 const usersCacheSubset: CachedTableMeta = { tableId: 'users', keyPattern: 'user:{id}', columns: ['id', 'name'] }
@@ -267,6 +275,27 @@ describe('Planner — P1: Direct (single database)', () => {
     if (plan.strategy === 'direct') {
       expect(plan.database).toBe('iceberg-archive')
       expect(plan.dialect).toBe('trino')
+    }
+  })
+
+  it('#7: PG + Iceberg (no sync) → trino cross-db', () => {
+    const s = snap({ syncs: [] })
+    const plan = planQuery({ from: 'orders', joins: [{ table: 'ordersArchive' }] }, s, { trinoEnabled: true })
+    expect(plan.strategy).toBe('trino')
+    if (plan.strategy === 'trino') {
+      expect(plan.catalogs.get('pg-main')).toBe('pg_main')
+      expect(plan.catalogs.get('iceberg-archive')).toBe('iceberg_archive')
+    }
+  })
+
+  it('#7b: PG + Iceberg (with sync) → materialized via iceberg', () => {
+    const s = snap({ syncs: [ordersSyncToIceberg] })
+    const plan = planQuery({ from: 'orders', joins: [{ table: 'ordersArchive' }] }, s)
+    expect(plan.strategy).toBe('materialized')
+    if (plan.strategy === 'materialized') {
+      expect(plan.database).toBe('iceberg-archive')
+      expect(plan.dialect).toBe('trino')
+      expect(plan.tableOverrides.get('orders')).toBe('warehouse.orders_current')
     }
   })
 })

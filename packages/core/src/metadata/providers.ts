@@ -1,5 +1,5 @@
 import type { MetadataConfig, RoleMeta } from '@mkven/multi-db-validation'
-import type { MetadataProvider, RoleProvider } from './types/providers.js'
+import type { MetadataProvider, RoleProvider } from '../types/providers.js'
 
 /**
  * Creates a MetadataProvider that always returns the same config.

@@ -1,8 +1,8 @@
-import type { ValidationErrorEntry } from './errors.js'
-import { ValidationError } from './errors.js'
-import type { MetadataIndex } from './metadataIndex.js'
-import type { ExecutionContext } from './types/context.js'
-import type { ColumnMeta, RoleMeta, TableMeta } from './types/metadata.js'
+import type { ValidationErrorEntry } from '../errors.js'
+import { ValidationError } from '../errors.js'
+import type { MetadataIndex } from '../metadataIndex.js'
+import type { ExecutionContext } from '../types/context.js'
+import type { ColumnMeta, RoleMeta, TableMeta } from '../types/metadata.js'
 import type {
   FilterOperator,
   QueryAggregation,
@@ -11,7 +11,7 @@ import type {
   QueryExistsFilter,
   QueryFilter,
   QueryFilterGroup,
-} from './types/query.js'
+} from '../types/query.js'
 
 // --- Operator / Type Compatibility ---
 

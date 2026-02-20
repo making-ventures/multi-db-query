@@ -1,5 +1,4 @@
 // Config validation
-export { validateApiName, validateConfig } from './configValidation.js'
 
 // Errors
 export type {
@@ -19,13 +18,8 @@ export {
   ProviderError,
   ValidationError,
 } from './errors.js'
-
 // Metadata Index
 export { MetadataIndex } from './metadataIndex.js'
-
-// Query validation
-export { validateQuery } from './queryValidation.js'
-
 // Types — context
 export type { ExecutionContext } from './types/context.js'
 export type {
@@ -68,3 +62,6 @@ export type {
   QueryResultMeta,
   SqlResult,
 } from './types/result.js'
+export { validateApiName, validateConfig } from './validation/configValidator.js'
+// Query validation
+export { validateQuery } from './validation/queryValidator.js'

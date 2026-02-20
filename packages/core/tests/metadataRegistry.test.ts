@@ -1,7 +1,7 @@
 import type { MetadataConfig, RoleMeta, TableMeta } from '@mkven/multi-db-validation'
 import { describe, expect, it } from 'vitest'
-import { MetadataRegistry } from '../src/metadataRegistry.js'
-import { staticMetadata, staticRoles } from '../src/staticProviders.js'
+import { staticMetadata, staticRoles } from '../src/metadata/providers.js'
+import { MetadataRegistry } from '../src/metadata/registry.js'
 import type { MetadataProvider, RoleProvider } from '../src/types/providers.js'
 
 // --- Fixtures ---

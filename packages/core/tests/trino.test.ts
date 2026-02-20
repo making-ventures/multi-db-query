@@ -304,7 +304,9 @@ describe('Trino — counted subquery', () => {
       countParamIndex: 0,
     }
     const { sql, params } = dialect.generate(base({ where: cond }), [5])
-    expect(sql).toContain('(SELECT COUNT(*) FROM "public"."orders" AS "s0" WHERE "t0"."id" = "s0"."user_id") >= ?')
+    expect(sql).toContain(
+      '(SELECT COUNT(*) FROM (SELECT 1 FROM "public"."orders" AS "s0" WHERE "t0"."id" = "s0"."user_id" LIMIT 5) AS "_c") >= ?',
+    )
     expect(params).toEqual([5])
   })
 })
@@ -388,5 +390,279 @@ describe('Trino — HAVING', () => {
     const { sql, params } = dialect.generate(parts, [5])
     expect(sql).toContain('HAVING "cnt" > ?')
     expect(params).toEqual([5])
+  })
+})
+
+describe('Trino — SELECT additional', () => {
+  it('empty select falls back to *', () => {
+    const { sql } = dialect.generate(base({ select: [] }), [])
+    expect(sql).toBe('SELECT * FROM "public"."users" AS "t0"')
+  })
+})
+
+describe('Trino — JOIN additional', () => {
+  it('left join', () => {
+    const parts = base({
+      joins: [
+        {
+          type: 'left',
+          table: tbl('public.orders', 't1'),
+          leftColumn: col('t0', 'id'),
+          rightColumn: col('t1', 'user_id'),
+        },
+      ],
+    })
+    const { sql } = dialect.generate(parts, [])
+    expect(sql).toContain('LEFT JOIN "public"."orders" AS "t1" ON "t0"."id" = "t1"."user_id"')
+  })
+})
+
+describe('Trino — WHERE standard additional', () => {
+  it('not equals', () => {
+    const cond: WhereCondition = { column: col('t0', 'name'), operator: '!=', paramIndex: 0 }
+    const { sql } = dialect.generate(base({ where: cond }), ['Alice'])
+    expect(sql).toContain('WHERE "t0"."name" != ?')
+  })
+
+  it('less than', () => {
+    const cond: WhereCondition = { column: col('t0', 'age'), operator: '<', paramIndex: 0 }
+    const { sql } = dialect.generate(base({ where: cond }), [30])
+    expect(sql).toContain('WHERE "t0"."age" < ?')
+  })
+
+  it('greater than or equal', () => {
+    const cond: WhereCondition = { column: col('t0', 'age'), operator: '>=', paramIndex: 0 }
+    const { sql } = dialect.generate(base({ where: cond }), [18])
+    expect(sql).toContain('WHERE "t0"."age" >= ?')
+  })
+
+  it('IS NOT NULL', () => {
+    const cond: WhereCondition = { column: col('t0', 'age'), operator: 'isNotNull' }
+    const { sql } = dialect.generate(base({ where: cond }), [])
+    expect(sql).toContain('"t0"."age" IS NOT NULL')
+  })
+})
+
+describe('Trino — LIKE additional', () => {
+  it('like raw pattern', () => {
+    const cond: WhereCondition = { column: col('t0', 'name'), operator: 'like', paramIndex: 0 }
+    const { sql, params } = dialect.generate(base({ where: cond }), ['%Alice%'])
+    expect(sql).toContain('WHERE "t0"."name" LIKE ?')
+    expect(params).toEqual(['%Alice%'])
+  })
+
+  it('notLike', () => {
+    const cond: WhereCondition = { column: col('t0', 'name'), operator: 'notLike', paramIndex: 0 }
+    const { sql } = dialect.generate(base({ where: cond }), ['%x%'])
+    expect(sql).toContain('WHERE "t0"."name" NOT LIKE ?')
+  })
+})
+
+describe('Trino — wildcard escaping', () => {
+  it('escapes % in startsWith', () => {
+    const cond: WhereCondition = { column: col('t0', 'name'), operator: 'startsWith', paramIndex: 0 }
+    const { params } = dialect.generate(base({ where: cond }), ['100%'])
+    expect(params).toEqual(['100\\%%'])
+  })
+
+  it('escapes _ in contains', () => {
+    const cond: WhereCondition = { column: col('t0', 'name'), operator: 'contains', paramIndex: 0 }
+    const { params } = dialect.generate(base({ where: cond }), ['a_b'])
+    expect(params).toEqual(['%a\\_b%'])
+  })
+
+  it('escapes backslash in endsWith', () => {
+    const cond: WhereCondition = { column: col('t0', 'name'), operator: 'endsWith', paramIndex: 0 }
+    const { params } = dialect.generate(base({ where: cond }), ['a\\b'])
+    expect(params).toEqual(['%a\\\\b'])
+  })
+})
+
+describe('Trino — groups additional', () => {
+  it('OR group', () => {
+    const cond: WhereGroup = {
+      logic: 'or',
+      conditions: [
+        { column: col('t0', 'name'), operator: '=', paramIndex: 0 } as WhereCondition,
+        { column: col('t0', 'name'), operator: '=', paramIndex: 1 } as WhereCondition,
+      ],
+    }
+    const { sql, params } = dialect.generate(base({ where: cond }), ['Alice', 'Bob'])
+    expect(sql).toContain('WHERE ("t0"."name" = ? OR "t0"."name" = ?)')
+    expect(params).toEqual(['Alice', 'Bob'])
+  })
+
+  it('NOT group', () => {
+    const cond: WhereGroup = {
+      logic: 'or',
+      not: true,
+      conditions: [
+        { column: col('t0', 'name'), operator: '=', paramIndex: 0 } as WhereCondition,
+        { column: col('t0', 'name'), operator: '=', paramIndex: 1 } as WhereCondition,
+      ],
+    }
+    const { sql } = dialect.generate(base({ where: cond }), ['x', 'y'])
+    expect(sql).toContain('WHERE NOT ("t0"."name" = ? OR "t0"."name" = ?)')
+  })
+
+  it('single-element group — no parens', () => {
+    const cond: WhereGroup = {
+      logic: 'and',
+      conditions: [{ column: col('t0', 'age'), operator: '>', paramIndex: 0 } as WhereCondition],
+    }
+    const { sql } = dialect.generate(base({ where: cond }), [10])
+    expect(sql).toContain('WHERE "t0"."age" > ?')
+    expect(sql).not.toContain('("t0"."age"')
+  })
+})
+
+describe('Trino — EXISTS additional', () => {
+  it('EXISTS with sub-filters', () => {
+    const subWhere: WhereCondition = { column: col('s0', 'status'), operator: '=', paramIndex: 0 }
+    const cond: WhereExists = {
+      exists: true,
+      subquery: {
+        from: tbl('public.orders', 's0'),
+        join: { leftColumn: col('t0', 'id'), rightColumn: col('s0', 'user_id') },
+        where: subWhere,
+      },
+    }
+    const { sql, params } = dialect.generate(base({ where: cond }), ['active'])
+    expect(sql).toContain('WHERE "t0"."id" = "s0"."user_id" AND "s0"."status" = ?')
+    expect(params).toEqual(['active'])
+  })
+})
+
+describe('Trino — aggregations additional', () => {
+  it('sum aggregation', () => {
+    const parts = base({
+      select: [col('t0', 'status')],
+      from: tbl('public.orders', 't0'),
+      groupBy: [col('t0', 'status')],
+      aggregations: [{ fn: 'sum', column: col('t0', 'amount'), alias: 'total' }],
+    })
+    const { sql } = dialect.generate(parts, [])
+    expect(sql).toContain('SUM("t0"."amount") AS "total"')
+  })
+
+  it('avg, min, max', () => {
+    const parts = base({
+      select: [],
+      from: tbl('public.orders', 't0'),
+      aggregations: [
+        { fn: 'avg', column: col('t0', 'amount'), alias: 'avg_amount' },
+        { fn: 'min', column: col('t0', 'amount'), alias: 'min_amount' },
+        { fn: 'max', column: col('t0', 'amount'), alias: 'max_amount' },
+      ],
+    })
+    const { sql } = dialect.generate(parts, [])
+    expect(sql).toContain('AVG("t0"."amount") AS "avg_amount"')
+    expect(sql).toContain('MIN("t0"."amount") AS "min_amount"')
+    expect(sql).toContain('MAX("t0"."amount") AS "max_amount"')
+  })
+})
+
+describe('Trino — HAVING additional', () => {
+  it('having between', () => {
+    const parts = base({
+      select: [col('t0', 'status')],
+      from: tbl('public.orders', 't0'),
+      groupBy: [col('t0', 'status')],
+      aggregations: [{ fn: 'sum', column: col('t0', 'amount'), alias: 'total' }],
+      having: { alias: 'total', fromParamIndex: 0, toParamIndex: 1 },
+    })
+    const { sql, params } = dialect.generate(parts, [100, 1000])
+    expect(sql).toContain('HAVING "total" BETWEEN ? AND ?')
+    expect(params).toEqual([100, 1000])
+  })
+})
+
+describe('Trino — ORDER BY additional', () => {
+  it('order by column asc', () => {
+    const parts = base({ orderBy: [{ column: col('t0', 'name'), direction: 'asc' }] })
+    const { sql } = dialect.generate(parts, [])
+    expect(sql).toContain('ORDER BY "t0"."name" ASC')
+  })
+
+  it('order by column desc', () => {
+    const parts = base({ orderBy: [{ column: col('t0', 'age'), direction: 'desc' }] })
+    const { sql } = dialect.generate(parts, [])
+    expect(sql).toContain('ORDER BY "t0"."age" DESC')
+  })
+
+  it('multiple order by', () => {
+    const parts = base({
+      orderBy: [
+        { column: col('t0', 'name'), direction: 'asc' },
+        { column: col('t0', 'age'), direction: 'desc' },
+      ],
+    })
+    const { sql } = dialect.generate(parts, [])
+    expect(sql).toContain('ORDER BY "t0"."name" ASC, "t0"."age" DESC')
+  })
+})
+
+describe('Trino — LIMIT/OFFSET additional', () => {
+  it('limit', () => {
+    const { sql } = dialect.generate(base({ limit: 10 }), [])
+    expect(sql).toContain('LIMIT 10')
+  })
+
+  it('offset', () => {
+    const { sql } = dialect.generate(base({ offset: 20 }), [])
+    expect(sql).toContain('OFFSET 20')
+  })
+})
+
+describe('Trino — full query', () => {
+  it('complex query combines all clauses', () => {
+    const parts: SqlParts = {
+      select: [col('t0', 'status')],
+      distinct: true,
+      from: tbl('public.orders', 't0'),
+      joins: [
+        {
+          type: 'inner',
+          table: tbl('public.users', 't1'),
+          leftColumn: col('t0', 'user_id'),
+          rightColumn: col('t1', 'id'),
+        },
+      ],
+      where: { column: col('t1', 'age'), operator: '>=', paramIndex: 0 },
+      groupBy: [col('t0', 'status')],
+      having: { column: 'cnt', operator: '>', paramIndex: 1 },
+      aggregations: [{ fn: 'count', column: '*', alias: 'cnt' }],
+      orderBy: [{ column: 'cnt', direction: 'desc' }],
+      limit: 5,
+      offset: 0,
+    }
+    const { sql, params } = dialect.generate(parts, [18, 2])
+
+    expect(sql).toBe(
+      'SELECT DISTINCT "t0"."status", COUNT(*) AS "cnt"' +
+        ' FROM "public"."orders" AS "t0"' +
+        ' INNER JOIN "public"."users" AS "t1" ON "t0"."user_id" = "t1"."id"' +
+        ' WHERE "t1"."age" >= ?' +
+        ' GROUP BY "t0"."status"' +
+        ' HAVING "cnt" > ?' +
+        ' ORDER BY "cnt" DESC' +
+        ' LIMIT 5' +
+        ' OFFSET 0',
+    )
+    expect(params).toEqual([18, 2])
+  })
+
+  it('param order preserved with multiple where clauses', () => {
+    const where: WhereGroup = {
+      logic: 'and',
+      conditions: [
+        { column: col('t0', 'name'), operator: '=', paramIndex: 0 } as WhereCondition,
+        { column: col('t0', 'age'), operator: '>=', paramIndex: 1 } as WhereCondition,
+        { column: col('t0', 'age'), operator: '<=', paramIndex: 2 } as WhereCondition,
+      ],
+    }
+    const { sql, params } = dialect.generate(base({ where }), ['Alice', 18, 65])
+    expect(sql).toContain('WHERE ("t0"."name" = ? AND "t0"."age" >= ? AND "t0"."age" <= ?)')
+    expect(params).toEqual(['Alice', 18, 65])
   })
 })
