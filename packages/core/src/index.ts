@@ -65,6 +65,17 @@ export { MetadataRegistry } from './metadataRegistry.js'
 // Name Resolution
 export type { ResolveResult } from './nameResolver.js'
 export { resolveNames } from './nameResolver.js'
+// Query Planner
+export type {
+  CachePlan,
+  DialectName,
+  DirectPlan,
+  MaterializedPlan,
+  PlannerOptions,
+  QueryPlan,
+  TrinoPlan,
+} from './planner.js'
+export { planQuery } from './planner.js'
 // Static provider helpers
 export { staticMetadata, staticRoles } from './staticProviders.js'
 // Public interfaces
