@@ -1,5 +1,7 @@
-// Errors
+// Config validation
+export { validateApiName, validateConfig } from './configValidation.js'
 
+// Errors
 export type {
   ConfigErrorEntry,
   ConnectionErrorDetails,
