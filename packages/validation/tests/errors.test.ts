@@ -110,7 +110,9 @@ describe('ConnectionError', () => {
     })
     const json = err.toJSON()
     const details = json.details as { unreachable: { cause: { message: string } }[] }
-    expect(details.unreachable[0].cause.message).toBe('refused')
+    const first = details.unreachable[0]
+    expect(first).toBeDefined()
+    expect(first?.cause.message).toBe('refused')
   })
 
   it('toJSON() omits engine/cause when undefined', () => {

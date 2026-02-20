@@ -110,7 +110,6 @@ describe('Scope resolution', () => {
   })
 
   it('#14b column masking — total masked', () => {
-    const _ctx: ExecutionContext = { roles: { user: ['tenant-user'] } }
     // First give tenant-user access to total to test masking
     const tenantWithTotal: RoleMeta = {
       id: 'tenant-total',

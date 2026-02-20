@@ -13,4 +13,8 @@ echo "=== Dependency checks ==="
 bash renovate-check.sh
 
 echo ""
+echo "=== Vulnerability audit ==="
+pnpm audit
+
+echo ""
 echo "Health checks passed."

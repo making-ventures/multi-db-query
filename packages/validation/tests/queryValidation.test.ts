@@ -4,7 +4,7 @@ import { validateQuery } from '../src/queryValidation.js'
 import type { ExecutionContext } from '../src/types/context.js'
 import type { MetadataConfig, RoleMeta } from '../src/types/metadata.js'
 import type { QueryDefinition } from '../src/types/query.js'
-import { validConfig } from './fixtures/testConfig.js'
+import { eventsTable, ordersTable, usersTable, validConfig } from './fixtures/testConfig.js'
 
 // --- Helpers ---
 
@@ -877,10 +877,10 @@ describe('Edge cases', () => {
     // Add reverse relation to ordersTable for nested EXISTS
     const config = validConfig()
     const ordersWithInverse = {
-      ...config.tables[1],
-      relations: [...config.tables[1].relations],
+      ...ordersTable,
+      relations: [...ordersTable.relations],
     }
-    config.tables = [config.tables[0], ordersWithInverse, config.tables[2]]
+    config.tables = [usersTable, ordersWithInverse, eventsTable]
 
     const idx = buildIndex(config)
     // users -> orders (exists) is valid

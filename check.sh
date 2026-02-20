@@ -10,7 +10,11 @@ pnpm exec biome check .
 
 echo ""
 echo "=== Typecheck ==="
-pnpm build
+pnpm typecheck
+
+echo ""
+echo "=== Typecheck (tests) ==="
+pnpm typecheck:tests
 
 echo ""
 echo "=== Tests ==="

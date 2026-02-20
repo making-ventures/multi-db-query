@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { validateApiName, validateConfig } from '../src/configValidation.js'
 import type { TableMeta } from '../src/types/metadata.js'
-import { validConfig } from './fixtures/testConfig.js'
+import { eventsTable, ordersTable, usersTable, validConfig } from './fixtures/testConfig.js'
 
 // --- validateApiName ---
 
@@ -54,7 +54,7 @@ describe('validateConfig', () => {
     const config = validConfig()
     config.tables = [
       {
-        ...config.tables[0],
+        ...usersTable,
         apiName: 'Order_Items',
       },
     ]
@@ -87,7 +87,7 @@ describe('validateConfig', () => {
     const config = validConfig()
     config.tables = [
       {
-        ...config.tables[0],
+        ...usersTable,
         database: 'pg-other',
       },
     ]
@@ -101,10 +101,10 @@ describe('validateConfig', () => {
   it('#52 invalid relation — non-existent table', () => {
     const config = validConfig()
     const badTable: TableMeta = {
-      ...config.tables[1],
+      ...ordersTable,
       relations: [{ column: 'userId', references: { table: 'invoiceLines', column: 'id' }, type: 'many-to-one' }],
     }
-    config.tables = [config.tables[0], badTable, config.tables[2]]
+    config.tables = [usersTable, badTable, eventsTable]
     const err = validateConfig(config)
     expect(err).not.toBeNull()
     expect(err?.errors.some((e) => e.code === 'INVALID_RELATION')).toBe(true)
@@ -113,10 +113,10 @@ describe('validateConfig', () => {
   it('#52 invalid relation — non-existent column', () => {
     const config = validConfig()
     const badTable: TableMeta = {
-      ...config.tables[1],
+      ...ordersTable,
       relations: [{ column: 'userId', references: { table: 'users', column: 'nonExistent' }, type: 'many-to-one' }],
     }
-    config.tables = [config.tables[0], badTable, config.tables[2]]
+    config.tables = [usersTable, badTable, eventsTable]
     const err = validateConfig(config)
     expect(err).not.toBeNull()
     expect(err?.errors.some((e) => e.code === 'INVALID_RELATION' && e.message.includes('nonExistent'))).toBe(true)
@@ -125,10 +125,10 @@ describe('validateConfig', () => {
   it('#52 invalid relation — source column does not exist', () => {
     const config = validConfig()
     const badTable: TableMeta = {
-      ...config.tables[1],
+      ...ordersTable,
       relations: [{ column: 'noSuchCol', references: { table: 'users', column: 'id' }, type: 'many-to-one' }],
     }
-    config.tables = [config.tables[0], badTable, config.tables[2]]
+    config.tables = [usersTable, badTable, eventsTable]
     const err = validateConfig(config)
     expect(err).not.toBeNull()
     expect(err?.errors.some((e) => e.code === 'INVALID_RELATION' && e.message.includes('noSuchCol'))).toBe(true)
@@ -139,10 +139,10 @@ describe('validateConfig', () => {
     const config = validConfig()
     // Invalid apiName + duplicate + broken reference
     config.tables = [
-      { ...config.tables[0], apiName: 'Order_Bad' },
-      { ...config.tables[1], id: 'orders-dup', apiName: 'orders' },
-      { ...config.tables[1] },
-      { ...config.tables[2], database: 'no-such-db' },
+      { ...usersTable, apiName: 'Order_Bad' },
+      { ...ordersTable, id: 'orders-dup', apiName: 'orders' },
+      { ...ordersTable },
+      { ...eventsTable, database: 'no-such-db' },
     ]
     const err = validateConfig(config)
     expect(err).not.toBeNull()
@@ -218,14 +218,14 @@ describe('validateConfig', () => {
     const config = validConfig()
     config.tables = [
       {
-        ...config.tables[0],
+        ...usersTable,
         columns: [
-          ...config.tables[0].columns,
+          ...usersTable.columns,
           { apiName: 'name', physicalName: 'display_name', type: 'string', nullable: false },
         ],
       },
-      config.tables[1],
-      config.tables[2],
+      ordersTable,
+      eventsTable,
     ]
     const err = validateConfig(config)
     expect(err).not.toBeNull()

@@ -1,4 +1,4 @@
-import type { MetadataConfig, RoleMeta } from '@mkven/multi-db-validation'
+import type { MetadataConfig, RoleMeta, TableMeta } from '@mkven/multi-db-validation'
 import { describe, expect, it } from 'vitest'
 import { MetadataRegistry } from '../src/metadataRegistry.js'
 import { staticMetadata, staticRoles } from '../src/staticProviders.js'
@@ -9,46 +9,31 @@ import type { MetadataProvider, RoleProvider } from '../src/types/providers.js'
 const pgMain = { id: 'pg_main', engine: 'postgres' as const, host: 'localhost', port: 5432 }
 const chAnalytics = { id: 'ch_analytics', engine: 'clickhouse' as const, host: 'localhost', port: 8123 }
 
-const usersTable = {
+const usersTable: TableMeta = {
   id: 'users',
   database: 'pg_main',
   physicalName: 'public.users',
   apiName: 'users',
   primaryKey: ['id'],
   columns: [
-    { apiName: 'id', physicalName: 'id', type: { kind: 'scalar' as const, type: 'uuid' as const }, nullable: false },
-    {
-      apiName: 'name',
-      physicalName: 'name',
-      type: { kind: 'scalar' as const, type: 'string' as const },
-      nullable: false,
-    },
+    { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
+    { apiName: 'name', physicalName: 'name', type: 'string', nullable: false },
   ],
   relations: [],
 }
 
-const ordersTable = {
+const ordersTable: TableMeta = {
   id: 'orders',
   database: 'pg_main',
   physicalName: 'public.orders',
   apiName: 'orders',
   primaryKey: ['id'],
   columns: [
-    { apiName: 'id', physicalName: 'id', type: { kind: 'scalar' as const, type: 'uuid' as const }, nullable: false },
-    {
-      apiName: 'userId',
-      physicalName: 'user_id',
-      type: { kind: 'scalar' as const, type: 'uuid' as const },
-      nullable: false,
-    },
-    {
-      apiName: 'amount',
-      physicalName: 'amount',
-      type: { kind: 'scalar' as const, type: 'decimal' as const },
-      nullable: false,
-    },
+    { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
+    { apiName: 'userId', physicalName: 'user_id', type: 'uuid', nullable: false },
+    { apiName: 'amount', physicalName: 'amount', type: 'decimal', nullable: false },
   ],
-  relations: [{ column: 'userId', references: { table: 'users', column: 'id' }, type: 'many-to-one' as const }],
+  relations: [{ column: 'userId', references: { table: 'users', column: 'id' }, type: 'many-to-one' }],
 }
 
 const userSync = {
