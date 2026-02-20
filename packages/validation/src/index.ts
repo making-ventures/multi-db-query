@@ -20,6 +20,12 @@ export {
   ValidationError,
 } from './errors.js'
 
+// Metadata Index
+export { MetadataIndex } from './metadataIndex.js'
+
+// Query validation
+export { validateQuery } from './queryValidation.js'
+
 // Types — context
 export type { ExecutionContext } from './types/context.js'
 export type {
