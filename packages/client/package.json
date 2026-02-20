@@ -18,6 +18,9 @@
   "dependencies": {
     "@mkven/multi-db-validation": "workspace:*"
   },
+  "devDependencies": {
+    "@mkven/multi-db": "workspace:*"
+  },
   "scripts": {
     "build": "tsc -b"
   }
