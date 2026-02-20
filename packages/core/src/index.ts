@@ -47,6 +47,14 @@ export {
   validateConfig,
   validateQuery,
 } from '@mkven/multi-db-validation'
+// Access Control & Masking
+export type { EffectiveColumn, EffectiveTableAccess, MaskingFn } from './accessControl.js'
+export {
+  applyMask,
+  computeAllowedColumns,
+  maskRows,
+  resolveTableAccess,
+} from './accessControl.js'
 // Metadata Registry
 export type { ConnectivityEdge, RegistrySnapshot } from './metadataRegistry.js'
 export { MetadataRegistry } from './metadataRegistry.js'
