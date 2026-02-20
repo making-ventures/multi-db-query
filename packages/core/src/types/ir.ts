@@ -29,6 +29,7 @@ export interface SqlParts {
   orderBy: OrderByClause[]
   limit?: number | undefined
   offset?: number | undefined
+  countMode?: boolean | undefined
 }
 
 // --- WHERE tree ---
@@ -48,6 +49,7 @@ export interface WhereCondition {
   operator: string
   paramIndex?: number | undefined
   literal?: string | undefined
+  columnType?: string | undefined
 }
 
 export interface WhereColumnCondition {
@@ -158,5 +160,5 @@ export interface ColumnMapping {
 // --- SQL Dialect ---
 
 export interface SqlDialect {
-  generate(parts: SqlParts): { sql: string; params: unknown[] }
+  generate(parts: SqlParts, params: unknown[]): { sql: string; params: unknown[] }
 }

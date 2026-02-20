@@ -55,6 +55,8 @@ export {
   maskRows,
   resolveTableAccess,
 } from './accessControl.js'
+// Dialects
+export { PostgresDialect } from './dialects/postgres.js'
 // Metadata Registry
 export type { ConnectivityEdge, RegistrySnapshot } from './metadataRegistry.js'
 export { MetadataRegistry } from './metadataRegistry.js'

@@ -154,6 +154,7 @@ class ResolutionContext {
       orderBy,
       limit: this.query.limit,
       offset: this.query.offset,
+      countMode: isCountMode,
     }
 
     return {
@@ -360,6 +361,7 @@ class ResolutionContext {
             column: this.resolveColumnRef(pkColName, this.fromTable.id),
             operator: 'in',
             paramIndex: paramIdx,
+            columnType: col.type.replace('[]', ''),
           })
         }
       }
@@ -478,6 +480,7 @@ class ResolutionContext {
       column: colRef,
       operator: op,
       paramIndex: this.addParam(filter.value),
+      columnType: op === 'in' || op === 'notIn' ? col.type.replace('[]', '') : undefined,
     }
   }
 
