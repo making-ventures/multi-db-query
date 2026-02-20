@@ -1,4 +1,22 @@
-// Types — metadata
+// Errors
+
+export type {
+  ConfigErrorEntry,
+  ConnectionErrorDetails,
+  ExecutionErrorDetails,
+  PlannerErrorDetails,
+  UnreachableProvider,
+  ValidationErrorEntry,
+} from './errors.js'
+export {
+  ConfigError,
+  ConnectionError,
+  ExecutionError,
+  MultiDbError,
+  PlannerError,
+  ProviderError,
+  ValidationError,
+} from './errors.js'
 
 // Types — context
 export type { ExecutionContext } from './types/context.js'
