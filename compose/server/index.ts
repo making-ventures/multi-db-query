@@ -5,6 +5,7 @@ import {
   ConfigError,
   ConnectionError,
   ExecutionError,
+  MultiDbError,
   PlannerError,
   ProviderError,
   ValidationError,
@@ -29,12 +30,7 @@ function errorToStatus(err: unknown): number {
 }
 
 function errorToBody(err: unknown): object {
-  if (err instanceof ValidationError) return { error: 'ValidationError', errors: err.errors }
-  if (err instanceof ConfigError) return { error: 'ConfigError', errors: err.errors }
-  if (err instanceof PlannerError) return { error: 'PlannerError', message: err.message }
-  if (err instanceof ExecutionError) return { error: 'ExecutionError', message: err.message }
-  if (err instanceof ConnectionError) return { error: 'ConnectionError', message: err.message }
-  if (err instanceof ProviderError) return { error: 'ProviderError', message: err.message }
+  if (err instanceof MultiDbError) return err.toJSON()
   const msg = err instanceof Error ? err.message : String(err)
   return { error: 'InternalError', message: msg }
 }
@@ -76,8 +72,8 @@ export async function createServer(config: ServerConfig): Promise<{
   const multiDb: MultiDb = await createMultiDb(config.multiDbOptions)
 
   // Build index once for validate endpoints
-  const meta = await config.multiDbOptions.metadataProvider.getMetadata()
-  const rolesData = await config.multiDbOptions.roleProvider.getRoles()
+  const meta = await config.multiDbOptions.metadataProvider.load()
+  const rolesData = await config.multiDbOptions.roleProvider.load()
   const metadataIndex = new MetadataIndex(meta, rolesData)
 
   async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {

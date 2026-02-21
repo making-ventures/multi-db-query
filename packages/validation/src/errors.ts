@@ -125,6 +125,9 @@ export interface ValidationErrorEntry {
     refColumn?: string | undefined
     refTable?: string | undefined
     filterIndex?: number | undefined
+    fn?: string | undefined
+    direction?: string | undefined
+    logic?: string | undefined
   }
 }
 

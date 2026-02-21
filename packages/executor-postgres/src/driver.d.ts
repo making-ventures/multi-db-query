@@ -23,4 +23,8 @@ declare module 'pg' {
     query(text: string, values?: unknown[]): Promise<QueryResult>
     end(): Promise<void>
   }
+
+  export namespace types {
+    function setTypeParser(oid: number, parser: (value: string) => unknown): void
+  }
 }

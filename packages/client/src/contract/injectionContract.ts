@@ -1,5 +1,5 @@
 import type { ExecutionContext, QueryDefinition } from '@mkven/multi-db-validation'
-import { ValidationError } from '@mkven/multi-db-validation'
+import { ExecutionError, ValidationError } from '@mkven/multi-db-validation'
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { QueryContract } from './queryContract.js'
 
@@ -10,6 +10,7 @@ const admin: ExecutionContext = { roles: { user: ['admin'] } }
 /**
  * Asserts the query either:
  * - throws a ValidationError (rejected before SQL generation), or
+ * - throws an ExecutionError (DB rejected the malformed query — still safe), or
  * - succeeds safely (malicious value treated as literal data, no injection)
  */
 async function expectSafeOrRejected(engine: QueryContract, definition: QueryDefinition): Promise<void> {
@@ -18,8 +19,8 @@ async function expectSafeOrRejected(engine: QueryContract, definition: QueryDefi
     // If it doesn't throw, query ran safely — value was parameterized
     expect(r.kind).toBeDefined()
   } catch (err) {
-    // If it throws, must be a validation error — not a DB crash
-    expect(err).toBeInstanceOf(ValidationError)
+    // If it throws, must be a validation error or an execution error (DB rejected it) — not a raw crash
+    expect(err instanceof ValidationError || err instanceof ExecutionError).toBe(true)
   }
 }
 

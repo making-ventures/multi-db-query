@@ -81,17 +81,35 @@ describeEdgeCaseContract('real-dbs (in-process)', async () => {
   return createMultiDb(multiDbOptions)
 })
 
+// ── Factory for fresh options (each call creates new connections) ───
+
+function freshOptions(): CreateMultiDbOptions {
+  return {
+    metadataProvider: staticMetadata(metadata),
+    roleProvider: staticRoles(roles),
+    executors: {
+      'pg-main': createPostgresExecutor({ connectionString: PG_URL }),
+      'ch-analytics': createClickHouseExecutor({
+        url: CH_URL,
+        username: 'default',
+        password: 'clickhouse',
+        database: 'multidb',
+      }),
+      trino: createTrinoExecutor({ server: TRINO_URL, user: 'trino' }),
+    },
+    cacheProviders: {
+      'redis-main': createRedisCache({ url: REDIS_URL }),
+    },
+  }
+}
+
 // ── Health check & lifecycle (in-process) ──────────────────────
 
-describeHealthLifecycleContract('real-dbs (in-process)', () => multiDbOptions)
+describeHealthLifecycleContract('real-dbs (in-process)', freshOptions)
 
 // ── Error contract (HTTP client) ───────────────────────────────
 
-describeErrorContract(
-  'http-client',
-  () => serverUrl,
-  () => multiDbOptions,
-)
+describeErrorContract('http-client', () => serverUrl, freshOptions)
 
 // ── SQL injection (in-process) ─────────────────────────────────
 

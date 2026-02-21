@@ -31,6 +31,12 @@ import {
   resolveTableForFilter,
   resolveTableForGroupBy,
   resolveTableForOrderBy,
+  VALID_AGG_FNS,
+  VALID_COLUMN_FILTER_OPS,
+  VALID_DIRECTIONS,
+  VALID_EXISTS_COUNT_OPS,
+  VALID_FILTER_OPS,
+  VALID_LOGIC_OPS,
 } from './rules.js'
 
 // --- Main Validation ---
@@ -165,6 +171,14 @@ export function validateQuery(
   if (definition.aggregations !== undefined) {
     const seenAliases = new Set<string>()
     for (const agg of definition.aggregations) {
+      if (!VALID_AGG_FNS.has(agg.fn)) {
+        errors.push({
+          code: 'INVALID_AGGREGATION',
+          message: `Invalid aggregation function '${agg.fn}', must be one of: count, sum, avg, min, max`,
+          details: { alias: agg.alias, fn: agg.fn },
+        })
+        continue
+      }
       if (seenAliases.has(agg.alias)) {
         errors.push({
           code: 'INVALID_AGGREGATION',
@@ -313,6 +327,14 @@ export function validateQuery(
   // Rule 9 — Order By validity
   if (definition.orderBy !== undefined) {
     for (const ob of definition.orderBy) {
+      if (!VALID_DIRECTIONS.has(ob.direction)) {
+        errors.push({
+          code: 'INVALID_ORDER_BY',
+          message: `Invalid orderBy direction '${ob.direction}', must be 'asc' or 'desc'`,
+          details: { column: ob.column, direction: ob.direction },
+        })
+        continue
+      }
       if (aggAliases.has(ob.column)) continue
 
       const obTable =
@@ -449,6 +471,14 @@ function validateSingleFilter(
   existsParentTable?: TableMeta | undefined,
 ): void {
   if (isFilterGroup(filter)) {
+    if (!VALID_LOGIC_OPS.has(filter.logic)) {
+      errors.push({
+        code: 'INVALID_FILTER',
+        message: `Invalid filter group logic '${filter.logic}', must be 'and' or 'or'`,
+        details: { logic: filter.logic },
+      })
+      return
+    }
     for (const cond of filter.conditions) {
       validateSingleFilter(
         cond,
@@ -468,12 +498,37 @@ function validateSingleFilter(
   }
 
   if (isExistsFilter(filter)) {
+    if (filter.count !== undefined && !VALID_EXISTS_COUNT_OPS.has(filter.count.operator)) {
+      errors.push({
+        code: 'INVALID_FILTER',
+        message: `Invalid EXISTS count operator '${filter.count.operator}'`,
+        details: { operator: filter.count.operator },
+      })
+      return
+    }
     validateExistsFilter(filter, filterIndex, fromTable, joinedTables, index, context, roles, errors, existsParentTable)
     return
   }
 
   if (isColumnFilter(filter)) {
+    if (!VALID_COLUMN_FILTER_OPS.has(filter.operator)) {
+      errors.push({
+        code: 'INVALID_FILTER',
+        message: `Invalid column filter operator '${filter.operator}'`,
+        details: { operator: filter.operator },
+      })
+      return
+    }
     validateColumnFilter(filter, filterIndex, fromTable, joinedTables, index, fromAccess, joinedAccessMap, errors)
+    return
+  }
+
+  if (!VALID_FILTER_OPS.has(filter.operator)) {
+    errors.push({
+      code: 'INVALID_FILTER',
+      message: `Invalid filter operator '${filter.operator}'`,
+      details: { operator: filter.operator },
+    })
     return
   }
 
@@ -896,6 +951,14 @@ function validateHavingFilter(
   errors: ValidationErrorEntry[],
 ): void {
   if (isFilterGroup(filter)) {
+    if (!VALID_LOGIC_OPS.has(filter.logic)) {
+      errors.push({
+        code: 'INVALID_HAVING',
+        message: `Invalid having group logic '${filter.logic}', must be 'and' or 'or'`,
+        details: { logic: filter.logic },
+      })
+      return
+    }
     for (const cond of filter.conditions) {
       if (isColumnFilter(cond)) {
         errors.push({

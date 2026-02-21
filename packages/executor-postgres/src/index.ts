@@ -1,5 +1,9 @@
 import type { DbExecutor } from '@mkven/multi-db-query'
-import { Pool } from 'pg'
+import { Pool, types } from 'pg'
+
+// Parse NUMERIC/DECIMAL and INT8 as JavaScript numbers instead of strings
+types.setTypeParser(1700, parseFloat) // numeric / decimal
+types.setTypeParser(20, Number) // int8 / bigint
 
 export interface PostgresExecutorConfig {
   readonly connectionString?: string | undefined

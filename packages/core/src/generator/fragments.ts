@@ -44,3 +44,21 @@ export function isArrayCond(n: WhereNode): n is WhereArrayCondition {
 export function escapeLike(value: string): string {
   return value.replace(/[%_\\]/g, '\\$&')
 }
+
+const VALID_AGG_FNS = new Set(['count', 'sum', 'avg', 'min', 'max'])
+
+/** Whitelist aggregation function name; defaults to COUNT if invalid. */
+export function safeAggFn(fn: string): string {
+  const lower = fn.toLowerCase()
+  return VALID_AGG_FNS.has(lower) ? lower.toUpperCase() : 'COUNT'
+}
+
+/** Escape a double-quoted SQL identifier (PG/Trino) by doubling internal double-quotes. */
+export function escapeIdentDQ(value: string): string {
+  return value.replace(/"/g, '""')
+}
+
+/** Escape a backtick-quoted SQL identifier (ClickHouse) by doubling internal backticks. */
+export function escapeIdentBT(value: string): string {
+  return value.replace(/`/g, '``')
+}

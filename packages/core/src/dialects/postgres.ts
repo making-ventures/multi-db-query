@@ -1,4 +1,5 @@
 import {
+  escapeIdentDQ,
   escapeLike,
   isArrayCond,
   isBetween,
@@ -7,6 +8,7 @@ import {
   isExists,
   isFn,
   isGroup,
+  safeAggFn,
 } from '../generator/fragments.js'
 import type {
   AggregationClause,
@@ -46,12 +48,14 @@ export class PostgresDialect implements SqlDialect {
 class PgGenerator {
   readonly outParams: unknown[] = []
   private readonly input: unknown[]
+  private aggregations: AggregationClause[] = []
 
   constructor(inputParams: unknown[]) {
     this.input = inputParams
   }
 
   build(parts: SqlParts): string {
+    this.aggregations = parts.aggregations
     const clauses: string[] = []
 
     clauses.push(this.selectClause(parts))
@@ -114,9 +118,9 @@ class PgGenerator {
   // --- Aggregation ---
 
   private aggClause(a: AggregationClause): string {
-    const fn = a.fn.toUpperCase()
+    const fn = safeAggFn(a.fn)
     const col = a.column === '*' ? '*' : quoteCol(a.column)
-    return `${fn}(${col}) AS "${a.alias}"`
+    return `${fn}(${col}) AS "${escapeIdentDQ(a.alias)}"`
   }
 
   // --- JOIN ---
@@ -215,7 +219,7 @@ class PgGenerator {
 
   // WhereGroup
   private whereGroup(g: WhereGroup): string {
-    const inner = g.conditions.map((c) => this.whereNode(c)).join(` ${g.logic.toUpperCase()} `)
+    const inner = g.conditions.map((c) => this.whereNode(c)).join(` ${g.logic === 'or' ? 'OR' : 'AND'} `)
     const wrapped = g.conditions.length > 1 ? `(${inner})` : inner
     return g.not === true ? `NOT ${wrapped}` : wrapped
   }
@@ -274,26 +278,45 @@ class PgGenerator {
 
   // --- HAVING ---
 
+  /** Resolve an aggregation alias to its expression (e.g. "totalAmt" → SUM("t0"."amount")). */
+  private resolveAlias(alias: string): string {
+    const agg = this.aggregations.find((a) => a.alias === alias)
+    if (agg) {
+      const fn = safeAggFn(agg.fn)
+      const col = agg.column === '*' ? '*' : quoteCol(agg.column)
+      return `${fn}(${col})`
+    }
+    return `"${escapeIdentDQ(alias)}"`
+  }
+
   private havingNode(node: HavingNode): string {
     if ('logic' in node && 'conditions' in node) {
       const g = node as HavingGroup
-      const inner = g.conditions.map((c) => this.havingNode(c)).join(` ${g.logic.toUpperCase()} `)
+      const inner = g.conditions.map((c) => this.havingNode(c)).join(` ${g.logic === 'or' ? 'OR' : 'AND'} `)
       const wrapped = g.conditions.length > 1 ? `(${inner})` : inner
       return g.not === true ? `NOT ${wrapped}` : wrapped
     }
     if ('alias' in node) {
       const b = node as HavingBetween
       const not = b.not === true ? 'NOT ' : ''
-      return `"${b.alias}" ${not}BETWEEN ${this.ref(b.fromParamIndex)} AND ${this.ref(b.toParamIndex)}`
+      return `${this.resolveAlias(b.alias)} ${not}BETWEEN ${this.ref(b.fromParamIndex)} AND ${this.ref(b.toParamIndex)}`
     }
-    return this.whereCond(node as WhereCondition)
+    // WhereCondition — resolve alias if column is a string
+    const c = node as WhereCondition
+    const col = typeof c.column === 'string' ? this.resolveAlias(c.column) : quoteCol(c.column)
+    const op = c.operator
+    if (op === 'isNull') return `${col} IS NULL`
+    if (op === 'isNotNull') return `${col} IS NOT NULL`
+    if (c.paramIndex === undefined) return `${col} ${op}`
+    return `${col} ${op} ${this.ref(c.paramIndex)}`
   }
 
   // --- ORDER BY ---
 
   private orderByClause(o: OrderByClause): string {
     const col = typeof o.column === 'string' ? `"${o.column}"` : quoteCol(o.column)
-    return `${col} ${o.direction.toUpperCase()}`
+    const dir = o.direction.toLowerCase() === 'desc' ? 'DESC' : 'ASC'
+    return `${col} ${dir}`
   }
 
   // --- Param helpers ---

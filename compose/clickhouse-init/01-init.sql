@@ -16,9 +16,9 @@ CREATE TABLE IF NOT EXISTS default.events (
 ORDER BY (id);
 
 INSERT INTO default.events (id, event_type, user_id, order_id, payload, tags, event_ts) VALUES
-  ('uuid-e1', 'purchase', 'uuid-c1', 1,    '{"action":"buy"}', ['urgent', 'vip'], '2024-01-15 10:05:00'),
-  ('uuid-e2', 'view',     'uuid-c2', NULL,  NULL,               [],                '2024-02-20 14:00:00'),
-  ('uuid-e3', 'purchase', 'uuid-c1', 3,    '{"action":"buy"}', ['urgent'],         '2024-03-10 08:20:00');
+  ('00000000-0000-4000-a000-000000000e01', 'purchase', '00000000-0000-4000-a000-000000000c01', 1,    '{"action":"buy"}', ['urgent', 'vip'], '2024-01-15 10:05:00'),
+  ('00000000-0000-4000-a000-000000000e02', 'view',     '00000000-0000-4000-a000-000000000c02', NULL,  NULL,               [],                '2024-02-20 14:00:00'),
+  ('00000000-0000-4000-a000-000000000e03', 'purchase', '00000000-0000-4000-a000-000000000c01', 3,    '{"action":"buy"}', ['urgent'],         '2024-03-10 08:20:00');
 
 -- ── samples ────────────────────────────────────────────────────
 
@@ -42,11 +42,11 @@ CREATE TABLE IF NOT EXISTS default.samples (
 ORDER BY (id);
 
 INSERT INTO default.samples (id, name, email, category, amount, discount, status, tags, scores, is_active, note, created_at, due_date, external_id, manager_id) VALUES
-  (1, 'Alpha',   'alpha@test.com',   'electronics', 100.00, 10.00, 'active',    ['fast', 'new'],          [1, 2],    true,  'note-1', '2024-01-15 10:00:00', '2024-02-20', 'uuid-s1', NULL),
-  (2, 'Beta',    'beta@test.com',    'clothing',    200.00, NULL,  'paid',       ['slow'],                 [3],       true,  NULL,     '2024-02-20 14:30:00', '2024-03-25', 'uuid-s2', 1),
-  (3, 'Gamma',   'gamma@test.com',   'electronics', 50.00,  5.00,  'cancelled', ['fast'],                 [],        false, 'note-3', '2024-03-10 08:15:00', NULL,         'uuid-s3', 1),
-  (4, 'Delta',   'delta@test.com',   'food',        300.00, NULL,  'active',    [],                       [],        NULL,  NULL,     '2024-04-05 16:45:00', '2024-05-01', 'uuid-s4', NULL),
-  (5, 'Epsilon', 'epsilon@test.com', 'electronics', 150.00, 0.00,  'shipped',   ['fast', 'slow', 'new'],  [1, 2, 3], true,  'note-5', '2024-05-12 12:00:00', '2024-06-15', 'uuid-s5', 2);
+  (1, 'Alpha',   'alpha@test.com',   'electronics', 100.00, 10.00, 'active',    ['fast', 'new'],          [1, 2],    true,  'note-1', '2024-01-15 10:00:00', '2024-02-20', '00000000-0000-4000-a000-000000000501', NULL),
+  (2, 'Beta',    'beta@test.com',    'clothing',    200.00, NULL,  'paid',       ['slow'],                 [3],       true,  NULL,     '2024-02-20 14:30:00', '2024-03-25', '00000000-0000-4000-a000-000000000502', 1),
+  (3, 'Gamma',   'gamma@test.com',   'electronics', 50.00,  5.00,  'cancelled', ['fast'],                 [],        false, 'note-3', '2024-03-10 08:15:00', NULL,         '00000000-0000-4000-a000-000000000503', 1),
+  (4, 'Delta',   'delta@test.com',   'food',        300.00, NULL,  'active',    [],                       [],        NULL,  NULL,     '2024-04-05 16:45:00', '2024-05-01', '00000000-0000-4000-a000-000000000504', NULL),
+  (5, 'Epsilon', 'epsilon@test.com', 'electronics', 150.00, 0.00,  'shipped',   ['fast', 'slow', 'new'],  [1, 2, 3], true,  'note-5', '2024-05-12 12:00:00', '2024-06-15', '00000000-0000-4000-a000-000000000505', 2);
 
 -- ── sample_items ───────────────────────────────────────────────
 

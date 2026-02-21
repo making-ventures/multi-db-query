@@ -380,8 +380,8 @@ export const roles: RoleMeta[] = [
 export const seedOrders = [
   {
     id: 1,
-    customer_id: 'uuid-c1',
-    product_id: 'uuid-p1',
+    customer_id: '00000000-0000-4000-a000-000000000c01',
+    product_id: '00000000-0000-4000-a000-0000000000a1',
     total_amount: 100.0,
     discount: 10.0,
     order_status: 'active',
@@ -393,8 +393,8 @@ export const seedOrders = [
   },
   {
     id: 2,
-    customer_id: 'uuid-c2',
-    product_id: 'uuid-p2',
+    customer_id: '00000000-0000-4000-a000-000000000c02',
+    product_id: '00000000-0000-4000-a000-0000000000a2',
     total_amount: 200.0,
     discount: null,
     order_status: 'paid',
@@ -406,8 +406,8 @@ export const seedOrders = [
   },
   {
     id: 3,
-    customer_id: 'uuid-c1',
-    product_id: 'uuid-p1',
+    customer_id: '00000000-0000-4000-a000-000000000c01',
+    product_id: '00000000-0000-4000-a000-0000000000a1',
     total_amount: 50.0,
     discount: 5.0,
     order_status: 'cancelled',
@@ -419,7 +419,7 @@ export const seedOrders = [
   },
   {
     id: 4,
-    customer_id: 'uuid-c3',
+    customer_id: '00000000-0000-4000-a000-000000000c03',
     product_id: null,
     total_amount: 300.0,
     discount: null,
@@ -432,8 +432,8 @@ export const seedOrders = [
   },
   {
     id: 5,
-    customer_id: 'uuid-c2',
-    product_id: 'uuid-p3',
+    customer_id: '00000000-0000-4000-a000-000000000c02',
+    product_id: '00000000-0000-4000-a000-0000000000a3',
     total_amount: 150.0,
     discount: 0.0,
     order_status: 'shipped',
@@ -446,14 +446,26 @@ export const seedOrders = [
 ]
 
 export const seedProducts = [
-  { id: 'uuid-p1', name: 'Widget A', category: 'electronics', price: 25.0, labels: ['sale', 'new'] },
-  { id: 'uuid-p2', name: 'Widget B', category: 'clothing', price: 40.0, labels: ['clearance'] },
-  { id: 'uuid-p3', name: 'Widget C', category: 'electronics', price: 15.0, labels: null },
+  {
+    id: '00000000-0000-4000-a000-0000000000a1',
+    name: 'Widget A',
+    category: 'electronics',
+    price: 25.0,
+    labels: ['sale', 'new'],
+  },
+  {
+    id: '00000000-0000-4000-a000-0000000000a2',
+    name: 'Widget B',
+    category: 'clothing',
+    price: 40.0,
+    labels: ['clearance'],
+  },
+  { id: '00000000-0000-4000-a000-0000000000a3', name: 'Widget C', category: 'electronics', price: 15.0, labels: null },
 ]
 
 export const seedUsers = [
   {
-    id: 'uuid-c1',
+    id: '00000000-0000-4000-a000-000000000c01',
     email: 'alice@example.com',
     phone: '+1234567890',
     first_name: 'Alice',
@@ -464,32 +476,32 @@ export const seedUsers = [
     created_at: '2023-01-01T00:00:00Z',
   },
   {
-    id: 'uuid-c2',
+    id: '00000000-0000-4000-a000-000000000c02',
     email: 'bob@example.com',
     phone: null,
     first_name: 'Bob',
     last_name: 'Jones',
     role: 'viewer',
     age: 25,
-    manager_id: 'uuid-c1',
+    manager_id: '00000000-0000-4000-a000-000000000c01',
     created_at: '2023-06-15T00:00:00Z',
   },
   {
-    id: 'uuid-c3',
+    id: '00000000-0000-4000-a000-000000000c03',
     email: 'carol@example.com',
     phone: '+9876543210',
     first_name: 'Carol',
     last_name: 'Williams',
     role: 'viewer',
     age: null,
-    manager_id: 'uuid-c1',
+    manager_id: '00000000-0000-4000-a000-000000000c01',
     created_at: '2024-01-01T00:00:00Z',
   },
 ]
 
 export const seedInvoices = [
   {
-    id: 'uuid-i1',
+    id: '00000000-0000-4000-a000-000000000b01',
     order_id: 1,
     amount: 100.0,
     status: 'paid',
@@ -498,7 +510,7 @@ export const seedInvoices = [
     due_date: '2024-02-20',
   },
   {
-    id: 'uuid-i2',
+    id: '00000000-0000-4000-a000-000000000b02',
     order_id: 2,
     amount: 200.0,
     status: 'pending',
@@ -507,7 +519,7 @@ export const seedInvoices = [
     due_date: '2024-03-25',
   },
   {
-    id: 'uuid-i3',
+    id: '00000000-0000-4000-a000-000000000b03',
     order_id: 1,
     amount: 50.0,
     status: 'paid',
@@ -519,27 +531,27 @@ export const seedInvoices = [
 
 export const seedEvents = [
   {
-    id: 'uuid-e1',
+    id: '00000000-0000-4000-a000-000000000e01',
     event_type: 'purchase',
-    user_id: 'uuid-c1',
+    user_id: '00000000-0000-4000-a000-000000000c01',
     order_id: 1,
     payload: '{"action":"buy"}',
     tags: ['urgent', 'vip'],
     event_ts: '2024-01-15T10:05:00Z',
   },
   {
-    id: 'uuid-e2',
+    id: '00000000-0000-4000-a000-000000000e02',
     event_type: 'view',
-    user_id: 'uuid-c2',
+    user_id: '00000000-0000-4000-a000-000000000c02',
     order_id: null,
     payload: null,
     tags: null,
     event_ts: '2024-02-20T14:00:00Z',
   },
   {
-    id: 'uuid-e3',
+    id: '00000000-0000-4000-a000-000000000e03',
     event_type: 'purchase',
-    user_id: 'uuid-c1',
+    user_id: '00000000-0000-4000-a000-000000000c01',
     order_id: 3,
     payload: '{"action":"buy"}',
     tags: ['urgent'],
@@ -548,10 +560,10 @@ export const seedEvents = [
 ]
 
 export const seedOrderItems = [
-  { order_id: 1, product_id: 'uuid-p1', quantity: 2, unit_price: 25.0 },
-  { order_id: 1, product_id: 'uuid-p2', quantity: 1, unit_price: 40.0 },
-  { order_id: 2, product_id: 'uuid-p2', quantity: 5, unit_price: 40.0 },
-  { order_id: 5, product_id: 'uuid-p3', quantity: 3, unit_price: 15.0 },
+  { order_id: 1, product_id: '00000000-0000-4000-a000-0000000000a1', quantity: 2, unit_price: 25.0 },
+  { order_id: 1, product_id: '00000000-0000-4000-a000-0000000000a2', quantity: 1, unit_price: 40.0 },
+  { order_id: 2, product_id: '00000000-0000-4000-a000-0000000000a2', quantity: 5, unit_price: 40.0 },
+  { order_id: 5, product_id: '00000000-0000-4000-a000-0000000000a3', quantity: 3, unit_price: 15.0 },
 ]
 
 export const seedSamples = [
@@ -569,7 +581,7 @@ export const seedSamples = [
     note: 'note-1',
     created_at: '2024-01-15T10:00:00Z',
     due_date: '2024-02-20',
-    external_id: 'uuid-s1',
+    external_id: '00000000-0000-4000-a000-000000000501',
     manager_id: null,
   },
   {
@@ -586,7 +598,7 @@ export const seedSamples = [
     note: null,
     created_at: '2024-02-20T14:30:00Z',
     due_date: '2024-03-25',
-    external_id: 'uuid-s2',
+    external_id: '00000000-0000-4000-a000-000000000502',
     manager_id: 1,
   },
   {
@@ -603,7 +615,7 @@ export const seedSamples = [
     note: 'note-3',
     created_at: '2024-03-10T08:15:00Z',
     due_date: null,
-    external_id: 'uuid-s3',
+    external_id: '00000000-0000-4000-a000-000000000503',
     manager_id: 1,
   },
   {
@@ -620,7 +632,7 @@ export const seedSamples = [
     note: null,
     created_at: '2024-04-05T16:45:00Z',
     due_date: '2024-05-01',
-    external_id: 'uuid-s4',
+    external_id: '00000000-0000-4000-a000-000000000504',
     manager_id: null,
   },
   {
@@ -637,7 +649,7 @@ export const seedSamples = [
     note: 'note-5',
     created_at: '2024-05-12T12:00:00Z',
     due_date: '2024-06-15',
-    external_id: 'uuid-s5',
+    external_id: '00000000-0000-4000-a000-000000000505',
     manager_id: 2,
   },
 ]

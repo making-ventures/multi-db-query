@@ -1,4 +1,5 @@
 import {
+  escapeIdentBT,
   escapeLike,
   isArrayCond,
   isBetween,
@@ -7,6 +8,7 @@ import {
   isExists,
   isFn,
   isGroup,
+  safeAggFn,
 } from '../generator/fragments.js'
 import type {
   AggregationClause,
@@ -115,9 +117,9 @@ class ChGenerator {
   // --- Aggregation ---
 
   private aggClause(a: AggregationClause): string {
-    const fn = a.fn.toUpperCase()
+    const fn = safeAggFn(a.fn)
     const col = a.column === '*' ? '*' : quoteCol(a.column)
-    return `${fn}(${col}) AS \`${a.alias}\``
+    return `${fn}(${col}) AS \`${escapeIdentBT(a.alias)}\``
   }
 
   // --- JOIN ---
@@ -224,7 +226,7 @@ class ChGenerator {
 
   // WhereGroup
   private whereGroup(g: WhereGroup): string {
-    const inner = g.conditions.map((c) => this.whereNode(c)).join(` ${g.logic.toUpperCase()} `)
+    const inner = g.conditions.map((c) => this.whereNode(c)).join(` ${g.logic === 'or' ? 'OR' : 'AND'} `)
     const wrapped = g.conditions.length > 1 ? `(${inner})` : inner
     return g.not === true ? `NOT ${wrapped}` : wrapped
   }
@@ -284,16 +286,16 @@ class ChGenerator {
   private havingNode(node: HavingNode): string {
     if ('logic' in node && 'conditions' in node) {
       const g = node as HavingGroup
-      const inner = g.conditions.map((c) => this.havingNode(c)).join(` ${g.logic.toUpperCase()} `)
+      const inner = g.conditions.map((c) => this.havingNode(c)).join(` ${g.logic === 'or' ? 'OR' : 'AND'} `)
       const wrapped = g.conditions.length > 1 ? `(${inner})` : inner
       return g.not === true ? `NOT ${wrapped}` : wrapped
     }
     if ('alias' in node) {
       const b = node as HavingBetween
       if (b.not === true) {
-        return `NOT (\`${b.alias}\` BETWEEN ${this.ref(b.fromParamIndex)} AND ${this.ref(b.toParamIndex)})`
+        return `NOT (\`${escapeIdentBT(b.alias)}\` BETWEEN ${this.ref(b.fromParamIndex)} AND ${this.ref(b.toParamIndex)})`
       }
-      return `\`${b.alias}\` BETWEEN ${this.ref(b.fromParamIndex)} AND ${this.ref(b.toParamIndex)}`
+      return `\`${escapeIdentBT(b.alias)}\` BETWEEN ${this.ref(b.fromParamIndex)} AND ${this.ref(b.toParamIndex)}`
     }
     return this.whereCond(node as WhereCondition)
   }
@@ -302,7 +304,8 @@ class ChGenerator {
 
   private orderByClause(o: OrderByClause): string {
     const col = typeof o.column === 'string' ? `\`${o.column}\`` : quoteCol(o.column)
-    return `${col} ${o.direction.toUpperCase()}`
+    const dir = o.direction.toLowerCase() === 'desc' ? 'DESC' : 'ASC'
+    return `${col} ${dir}`
   }
 
   // --- Param helpers ---

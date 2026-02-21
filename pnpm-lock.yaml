@@ -17,6 +17,12 @@ importers:
       '@changesets/cli':
         specifier: ^2.29.0
         version: 2.29.8
+      '@mkven/multi-db-query':
+        specifier: workspace:*
+        version: link:packages/core
+      '@mkven/multi-db-validation':
+        specifier: workspace:*
+        version: link:packages/validation
       typescript:
         specifier: ^5.8.0
         version: 5.9.3
@@ -39,6 +45,18 @@ importers:
         specifier: workspace:*
         version: link:../validation
     devDependencies:
+      '@mkven/multi-db-cache-redis':
+        specifier: workspace:*
+        version: link:../cache-redis
+      '@mkven/multi-db-executor-clickhouse':
+        specifier: workspace:*
+        version: link:../executor-clickhouse
+      '@mkven/multi-db-executor-postgres':
+        specifier: workspace:*
+        version: link:../executor-postgres
+      '@mkven/multi-db-executor-trino':
+        specifier: workspace:*
+        version: link:../executor-trino
       '@mkven/multi-db-query':
         specifier: workspace:*
         version: link:../core

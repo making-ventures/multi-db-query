@@ -530,7 +530,7 @@ describe('PostgresDialect — HAVING', () => {
       having: { column: 'cnt', operator: '>', paramIndex: 0 },
     })
     const { sql, params } = dialect.generate(parts, [5])
-    expect(sql).toContain('HAVING "cnt" > $1')
+    expect(sql).toContain('HAVING COUNT(*) > $1')
     expect(params).toEqual([5])
   })
 
@@ -543,7 +543,7 @@ describe('PostgresDialect — HAVING', () => {
       having: { alias: 'total', fromParamIndex: 0, toParamIndex: 1 },
     })
     const { sql, params } = dialect.generate(parts, [100, 1000])
-    expect(sql).toContain('HAVING "total" BETWEEN $1 AND $2')
+    expect(sql).toContain('HAVING SUM("t0"."total") BETWEEN $1 AND $2')
     expect(params).toEqual([100, 1000])
   })
 
@@ -556,7 +556,7 @@ describe('PostgresDialect — HAVING', () => {
       having: { alias: 'total', not: true, fromParamIndex: 0, toParamIndex: 1 },
     })
     const { sql, params } = dialect.generate(parts, [100, 1000])
-    expect(sql).toContain('HAVING "total" NOT BETWEEN $1 AND $2')
+    expect(sql).toContain('HAVING SUM("t0"."total") NOT BETWEEN $1 AND $2')
     expect(params).toEqual([100, 1000])
   })
 })
@@ -645,7 +645,7 @@ describe('PostgresDialect — full query', () => {
         ' INNER JOIN "public"."users" AS "t1" ON "t0"."user_id" = "t1"."id"' +
         ' WHERE "t1"."age" >= $1' +
         ' GROUP BY "t0"."status"' +
-        ' HAVING "cnt" > $2' +
+        ' HAVING COUNT(*) > $2' +
         ' ORDER BY "cnt" DESC' +
         ' LIMIT 5' +
         ' OFFSET 0',

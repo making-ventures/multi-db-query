@@ -9,6 +9,46 @@ import type {
   QueryFilterGroup,
 } from '../types/query.js'
 
+// ── Enum Validation Constants ──────────────────────────────────
+
+export const VALID_DIRECTIONS = new Set(['asc', 'desc'])
+export const VALID_AGG_FNS = new Set(['count', 'sum', 'avg', 'min', 'max'])
+export const VALID_FILTER_OPS = new Set<string>([
+  '=',
+  '!=',
+  '>',
+  '<',
+  '>=',
+  '<=',
+  'in',
+  'notIn',
+  'like',
+  'notLike',
+  'ilike',
+  'notIlike',
+  'isNull',
+  'isNotNull',
+  'between',
+  'notBetween',
+  'contains',
+  'icontains',
+  'notContains',
+  'notIcontains',
+  'startsWith',
+  'istartsWith',
+  'endsWith',
+  'iendsWith',
+  'levenshteinLte',
+  'arrayContains',
+  'arrayContainsAll',
+  'arrayContainsAny',
+  'arrayIsEmpty',
+  'arrayIsNotEmpty',
+])
+export const VALID_COLUMN_FILTER_OPS = new Set(['=', '!=', '>', '<', '>=', '<='])
+export const VALID_EXISTS_COUNT_OPS = new Set(['=', '!=', '>', '<', '>=', '<='])
+export const VALID_LOGIC_OPS = new Set(['and', 'or'])
+
 // ── Operator / Type Constants ──────────────────────────────────
 
 export const ORDERABLE_TYPES = new Set(['string', 'int', 'decimal', 'date', 'timestamp'])
