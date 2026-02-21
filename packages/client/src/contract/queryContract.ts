@@ -109,5 +109,49 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         }),
       ).rejects.toThrow(ValidationError)
     })
+
+    it('#236: debug mode includes debugLog', async () => {
+      const result = await engine.query({
+        definition: { from: 'orders', columns: ['id', 'status'], debug: true },
+        context: { roles: { user: ['admin'] } },
+      })
+      expect(result.kind).toBe('data')
+      if (result.kind === 'data') {
+        expect(Array.isArray(result.debugLog)).toBe(true)
+        expect(result.debugLog!.length).toBeGreaterThan(0)
+        for (const entry of result.debugLog!) {
+          expect(typeof entry.timestamp).toBe('number')
+          expect(typeof entry.phase).toBe('string')
+          expect(typeof entry.message).toBe('string')
+        }
+      }
+    })
+
+    it('#237: masking reported in meta.columns', async () => {
+      const result = await engine.query({
+        definition: { from: 'orders', columns: ['id', 'total'] },
+        context: { roles: { user: ['tenant-user'] } },
+      })
+      expect(result.kind).toBe('data')
+      if (result.kind === 'data') {
+        const totalCol = result.meta.columns.find((c) => c.apiName === 'total')
+        expect(totalCol).toBeDefined()
+        expect(totalCol!.masked).toBe(true)
+        const idCol = result.meta.columns.find((c) => c.apiName === 'id')
+        expect(idCol).toBeDefined()
+        expect(idCol!.masked).toBe(false)
+      }
+    })
+
+    it('#238: byIds returns data', async () => {
+      const result = await engine.query({
+        definition: { from: 'orders', byIds: [1, 2] },
+        context: { roles: { user: ['admin'] } },
+      })
+      expect(result.kind).toBe('data')
+      if (result.kind === 'data') {
+        expect(result.meta.columns.length).toBeGreaterThan(0)
+      }
+    })
   })
 }

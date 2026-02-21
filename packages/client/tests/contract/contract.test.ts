@@ -16,7 +16,7 @@ const config: MetadataConfig = {
         { apiName: 'id', physicalName: 'id', type: 'int', nullable: false },
         { apiName: 'customerId', physicalName: 'customer_id', type: 'uuid', nullable: false },
         { apiName: 'productId', physicalName: 'product_id', type: 'uuid', nullable: true },
-        { apiName: 'total', physicalName: 'total_amount', type: 'decimal', nullable: false },
+        { apiName: 'total', physicalName: 'total_amount', type: 'decimal', nullable: false, maskingFn: 'number' },
         { apiName: 'status', physicalName: 'order_status', type: 'string', nullable: false },
         { apiName: 'internalNote', physicalName: 'internal_note', type: 'string', nullable: true, maskingFn: 'full' },
       ],
@@ -60,7 +60,7 @@ const roles: RoleMeta[] = [
   { id: 'admin', tables: '*' },
   {
     id: 'tenant-user',
-    tables: [{ tableId: 'orders', allowedColumns: ['id', 'total', 'status'] }],
+    tables: [{ tableId: 'orders', allowedColumns: ['id', 'total', 'status'], maskedColumns: ['total'] }],
   },
 ]
 
