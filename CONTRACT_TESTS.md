@@ -99,7 +99,7 @@ Trino: `{ enabled: true }`
 | apiName | physicalName | type | nullable | maskingFn |
 |---|---|---|---|---|
 | id | id | int | false | — |
-| customerId | customer_id | uuid | false | — |
+| customerId | customer_id | uuid | false | uuid |
 | productId | product_id | uuid | true | — |
 | total | total_amount | decimal | false | number |
 | discount | discount | decimal | true | — |
@@ -271,7 +271,7 @@ The `redis-main` cache provider enables `byIds` queries on `users` to be served 
 |---|---|
 | `admin` | `'*'` (all tables, all columns, no masking) |
 | `tenant-user` | orders: `[id, total, status, createdAt]`, maskedColumns: `[total]`; users: `[id, firstName, lastName, email]`, maskedColumns: `[email]`; products: `[id, name, category, price]` |
-| `analyst` | orders: `[id, total, status, internalNote, createdAt]`, maskedColumns: `[internalNote, createdAt]`; users: `[id, firstName, lastName, email, phone]`, maskedColumns: `[phone, firstName, lastName]`; products: `[id, name, category, price]`, maskedColumns: `[price]`; invoices: `[id, orderId, amount, status]`, maskedColumns: `[amount]` |
+| `analyst` | orders: `[id, total, status, internalNote, createdAt, customerId]`, maskedColumns: `[internalNote, createdAt, customerId]`; users: `[id, firstName, lastName, email, phone]`, maskedColumns: `[phone, firstName, lastName]`; products: `[id, name, category, price]`, maskedColumns: `[price]`; invoices: `[id, orderId, amount, status]`, maskedColumns: `[amount]` |
 | `viewer` | orders: `[id, status, createdAt, quantity]`; users: `[id, firstName]` |
 | `no-access` | `[]` (empty — zero permissions) |
 | `orders-service` | orders: `'*'`; products: `'*'`; users: `[id, firstName, lastName]` |
@@ -646,7 +646,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C608 | Self-referencing EXISTS | samples WHERE EXISTS samples (via managerId → samples.id) | 2 rows (ids 1, 2 — they manage other samples) |
 | C609 | EXISTS with join | samples JOIN sampleItems WHERE EXISTS samples (via managerId) | samples that manage others, with item data included |
 | C610 | Counted EXISTS (>) | samples WHERE EXISTS sampleItems `count: { operator: '>', value: 1 }` | 2 rows (ids 1, 5 — each has > 1 items) |
-| C611 | Counted EXISTS (<) | samples WHERE EXISTS sampleItems `count: { operator: '<', value: 2 }` | 2 rows (ids 2, 3 — each has 1 item, which is < 2) |
+| C611 | Counted EXISTS (<) | samples WHERE EXISTS sampleItems `count: { operator: '<', value: 2 }` | 3 rows (ids 2, 3, 4 — scalar subquery: COUNT 1, 1, 0 all < 2) |
 | C612 | Counted EXISTS (!=) | samples WHERE EXISTS sampleItems `count: { operator: '!=', value: 0 }` | 4 rows (ids 1, 2, 3, 5 — have non-zero items) |
 | C613 | Counted EXISTS (<=) | samples WHERE EXISTS sampleItems `count: { operator: '<=', value: 1 }` | 3 rows (ids 2, 3, 4 — 0 or 1 items) |
 
@@ -705,7 +705,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C813 | Multiple masking functions in one query | users columns: [id, email, phone, firstName] (analyst) | email: `false` (analyst has no email masking); phone: `true`; firstName: `true` — different functions on different columns |
 | C814 | Masked value (date) | orders columns: [id, createdAt] (analyst) | `createdAt` is masked: e.g. `'2024-01-01'` (date masking → year + `-01-01`, no time component) |
 | C815 | Masking on null value | orders columns: [id, discount] (tenant-user) | null `discount` remains `null` — masking is skipped for null/undefined values |
-| C816 | Masked value (uuid) | users columns: [id, customerId] via orders join (with uuid masking configured) | uuid masked: e.g. `550e****` (first 4 chars + `****`) |
+| C816 | Masked value (uuid) | orders columns: [id, customerId] (analyst) | `customerId` masked: e.g. `a1b2****` (first 4 hex chars + `****`) |
 
 ---
 
