@@ -783,7 +783,9 @@ These tests verify that errors transmitted over HTTP are properly reconstructed 
 
 ## 16. SQL Injection Resistance
 
-These tests verify that user-provided values in filters cannot inject SQL. Each test sends a malicious value and asserts the query either succeeds safely (value treated as data, not code) or is properly rejected.
+These tests verify that user-provided inputs — filter values, column/table names, aggregation aliases, and subquery references — cannot inject SQL. Each test sends a malicious value and asserts the query either succeeds safely (value treated as data, not code) or is properly rejected with a validation error.
+
+### 16.1 Filter Value Injection
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
@@ -791,9 +793,30 @@ These tests verify that user-provided values in filters cannot inject SQL. Each 
 | C1401 | SQL injection in `like` filter value | users, `email like "%'; DROP TABLE users; --%"` | value parameterized; no injection |
 | C1402 | SQL injection in `contains` value | users, `email contains "'; DROP TABLE --"` | value escaped and parameterized |
 | C1403 | SQL injection in `between` value | orders, `total between { from: "0; DROP TABLE orders", to: 100 }` | rejected or treated as literal |
+| C1406 | SQL injection in `in` filter | orders, `status in ["active'; DROP TABLE orders; --"]` | value parameterized |
+| C1407 | SQL injection in `notIn` filter | orders, `status notIn ["active'; DROP TABLE orders; --"]` | value parameterized; no injection |
+| C1408 | SQL injection in `levenshteinLte` text | users, `firstName levenshteinLte { text: "'; DROP TABLE users; --", maxDistance: 3 }` | both `text` and `maxDistance` parameterized; no injection |
+| C1409 | SQL injection in `arrayContains` value | products, `labels arrayContains "sale'; DROP TABLE products; --"` | value parameterized; no injection |
+
+### 16.2 Identifier Injection
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
 | C1404 | SQL injection in column name | orders, `columns: ['id"; DROP TABLE orders; --']` | `UNKNOWN_COLUMN` error (not executed as SQL) |
 | C1405 | SQL injection in table name | `from: 'orders; DROP TABLE orders'` | `UNKNOWN_TABLE` error |
-| C1406 | SQL injection in `in` filter | orders, `status in ["active'; DROP TABLE orders; --"]` | value parameterized |
+| C1410 | SQL injection in `byIds` values | users, `byIds: ["'; DROP TABLE users; --"]` | values parameterized (treated as `in` filter on PK); no injection |
+| C1411 | SQL injection in EXISTS table name | orders with `exists: { table: "users; DROP TABLE users", on: { left: 'customerId', right: 'id' } }` | `UNKNOWN_TABLE` error |
+
+### 16.3 Aggregation Alias Injection
+
+Aggregation aliases are user-provided strings interpolated into SQL as quoted identifiers (`"alias"` for Postgres/Trino, `` `alias` `` for ClickHouse). If the alias contains the quoting character, it could break out of identifier quoting and inject SQL. Conforming implementations must either **reject** aliases containing SQL metacharacters at validation time (`INVALID_AGGREGATION`) or **escape** the quoting character (e.g., `"` → `""` for Postgres/Trino, `` ` `` → ``` `` ``` for ClickHouse).
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1412 | Aggregation alias with double-quote injection | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; DROP TABLE orders;--' }]` | `INVALID_AGGREGATION` validation error **or** alias safely escaped in generated SQL; no SQL injection |
+| C1413 | Aggregation alias with backtick injection | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x`; DROP TABLE orders;--' }]` | same: rejected or escaped; no injection |
+| C1414 | HAVING referencing injected alias | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; --' }]`, `having: [{ alias: 'x"; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in HAVING clause |
+| C1415 | ORDER BY referencing injected alias | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; --' }]`, `orderBy: [{ column: 'x"; --', direction: 'asc' }]` | rejected or escaped; no injection in ORDER BY clause |
 
 ---
 
@@ -877,7 +900,7 @@ For implementation developers, verify the following groups pass in order:
 17. **SQL Injection** (C1400-C1406) — security
 18. **Edge Cases** (C1700-C1714) — nulls, types, strategies, distinct+count, empty groups
 
-Total: **289 contract tests**
+Total: **298 contract tests**
 
 ---
 
