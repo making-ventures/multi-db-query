@@ -1,4 +1,4 @@
-import type { DbExecutor } from '@mkven/multi-db'
+import type { DbExecutor } from '@mkven/multi-db-query'
 
 export interface TrinoExecutorConfig {
   readonly server: string
@@ -144,4 +144,4 @@ export function createTrinoExecutor(config: TrinoExecutorConfig): DbExecutor {
   }
 }
 
-export type { DbExecutor } from '@mkven/multi-db'
+export type { DbExecutor } from '@mkven/multi-db-query'

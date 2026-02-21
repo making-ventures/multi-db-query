@@ -1,4 +1,4 @@
-import type { DbExecutor } from '@mkven/multi-db'
+import type { DbExecutor } from '@mkven/multi-db-query'
 import { Pool } from 'pg'
 
 export interface PostgresExecutorConfig {
@@ -42,4 +42,4 @@ export function createPostgresExecutor(config: PostgresExecutorConfig): DbExecut
   }
 }
 
-export type { DbExecutor } from '@mkven/multi-db'
+export type { DbExecutor } from '@mkven/multi-db-query'

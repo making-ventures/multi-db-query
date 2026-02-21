@@ -1,4 +1,4 @@
-import type { CacheProvider } from '@mkven/multi-db'
+import type { CacheProvider } from '@mkven/multi-db-query'
 import Redis from 'ioredis'
 
 export interface RedisCacheConfig {
@@ -56,4 +56,4 @@ export function createRedisCache(config: RedisCacheConfig): CacheProvider {
   }
 }
 
-export type { CacheProvider } from '@mkven/multi-db'
+export type { CacheProvider } from '@mkven/multi-db-query'

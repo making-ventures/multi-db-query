@@ -1,5 +1,5 @@
 import { createClient } from '@clickhouse/client'
-import type { DbExecutor } from '@mkven/multi-db'
+import type { DbExecutor } from '@mkven/multi-db-query'
 
 export interface ClickHouseExecutorConfig {
   readonly url?: string | undefined
@@ -52,4 +52,4 @@ export function createClickHouseExecutor(config: ClickHouseExecutorConfig): DbEx
   }
 }
 
-export type { DbExecutor } from '@mkven/multi-db'
+export type { DbExecutor } from '@mkven/multi-db-query'

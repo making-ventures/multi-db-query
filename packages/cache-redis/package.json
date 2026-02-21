@@ -16,7 +16,7 @@
     "dist"
   ],
   "dependencies": {
-    "@mkven/multi-db": "workspace:*"
+    "@mkven/multi-db-query": "workspace:*"
   },
   "peerDependencies": {
     "ioredis": ">=5.0.0"

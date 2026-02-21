@@ -1,4 +1,4 @@
-import type { DbExecutor, MetadataConfig, RoleMeta } from '@mkven/multi-db'
+import type { DbExecutor, MetadataConfig, RoleMeta } from '@mkven/multi-db-query'
 import {
   createMultiDb,
   MetadataIndex,
@@ -6,7 +6,7 @@ import {
   staticRoles,
   validateConfig,
   validateQuery,
-} from '@mkven/multi-db'
+} from '@mkven/multi-db-query'
 import type { ValidateResult } from '../../src/client.js'
 import { describeQueryContract } from '../../src/contract/queryContract.js'
 import { describeValidationContract } from '../../src/contract/validationContract.js'

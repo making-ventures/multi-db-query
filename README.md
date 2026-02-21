@@ -1,4 +1,4 @@
-# @mkven/multi-db
+# @mkven/multi-db-query
 
 Metadata-driven, multi-database query engine for Postgres, ClickHouse, Iceberg (via Trino), and Redis.
 
@@ -7,7 +7,7 @@ Metadata-driven, multi-database query engine for Postgres, ClickHouse, Iceberg (
 | Package | Purpose |
 |---|---|
 | `@mkven/multi-db-validation` | Types, errors, config & query validation (zero I/O deps) |
-| `@mkven/multi-db` | Core: registry, planner, SQL generators, masking |
+| `@mkven/multi-db-query` | Core: registry, planner, SQL generators, masking |
 | `@mkven/multi-db-executor-postgres` | Postgres executor |
 | `@mkven/multi-db-executor-clickhouse` | ClickHouse executor |
 | `@mkven/multi-db-executor-trino` | Trino executor |

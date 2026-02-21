@@ -16,7 +16,7 @@
     "dist"
   ],
   "dependencies": {
-    "@mkven/multi-db": "workspace:*"
+    "@mkven/multi-db-query": "workspace:*"
   },
   "scripts": {
     "build": "tsc -b"

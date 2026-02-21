@@ -1,6 +1,6 @@
-# @mkven/multi-db — HTTP Contract Test Suite
+# @mkven/multi-db-query — HTTP Contract Test Suite
 
-This document defines the **full contract test suite** for any implementation of the `@mkven/multi-db` HTTP API. The contract verifies behavioral correctness through four endpoints:
+This document defines the **full contract test suite** for any implementation of the `@mkven/multi-db-query` HTTP API. The contract verifies behavioral correctness through four endpoints:
 
 - `POST /query` — accepts `{ definition, context }`, returns `QueryResult`
 - `GET /health` — returns `HealthCheckResult`
