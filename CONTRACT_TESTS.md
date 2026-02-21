@@ -791,9 +791,11 @@ Column names, table names, and EXISTS references are validated against metadata 
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C1404 | SQL injection in column name | `POST /validate/query`: orders, `columns: ['id"; DROP TABLE orders; --']` | `UNKNOWN_COLUMN` validation error (rejected before SQL generation) |
-| C1405 | SQL injection in table name | `POST /validate/query`: `from: 'orders; DROP TABLE orders'` | `UNKNOWN_TABLE` validation error |
-| C1411 | SQL injection in EXISTS table name | `POST /validate/query`: orders with `exists: { table: "users; DROP TABLE users", on: { left: 'customerId', right: 'id' } }` | `UNKNOWN_TABLE` validation error |
+| C1404 | Column name injection (`"` payload) | `POST /validate/query`: orders, `columns: ['id"; DROP TABLE orders; --']` | `UNKNOWN_COLUMN` validation error (rejected before SQL generation) |
+| C1418 | Column name injection (`` ` `` payload) | `POST /validate/query`: events, `columns: ['id`; DROP TABLE events; --']` | `UNKNOWN_COLUMN` validation error |
+| C1405 | Table name injection | `POST /validate/query`: `from: 'orders; DROP TABLE orders'` | `UNKNOWN_TABLE` validation error |
+| C1411 | EXISTS table name injection | `POST /validate/query`: orders with `exists: { table: "users; DROP TABLE users", on: { left: 'customerId', right: 'id' } }` | `UNKNOWN_TABLE` validation error |
+| C1421 | Column name on cross-DB table | `POST /validate/query`: events JOIN users, `columns: ['id"; DROP TABLE users; --']` on users side | `UNKNOWN_COLUMN` validation error |
 
 ### 16.2 Aggregation Alias Injection (all dialects)
 
@@ -806,7 +808,11 @@ Aggregation aliases are user-provided strings interpolated into SQL as quoted id
 | C1414 | PG HAVING referencing injected alias | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; --' }]`, `having: [{ alias: 'x"; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in HAVING clause |
 | C1415 | PG ORDER BY referencing injected alias | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; --' }]`, `orderBy: [{ column: 'x"; --', direction: 'asc' }]` | rejected or escaped; no injection in ORDER BY clause |
 | C1419 | CH alias with backtick injection | events, `aggregations: [{ column: 'timestamp', function: 'count', alias: 'x`; DROP TABLE events;--' }]` | rejected or backtick escaped in `` `alias` `` quoting; no injection |
+| C1448 | CH HAVING referencing backtick-injected alias | events, `aggregations: [{ column: 'timestamp', function: 'count', alias: 'x`; --' }]`, `having: [{ alias: 'x`; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in `` `alias` `` HAVING clause |
+| C1449 | CH ORDER BY referencing backtick-injected alias | events, `aggregations: [{ column: 'timestamp', function: 'count', alias: 'x`; --' }]`, `orderBy: [{ column: 'x`; --', direction: 'asc' }]` | rejected or escaped; no injection in `` `alias` `` ORDER BY clause |
 | C1422 | Trino alias with double-quote injection | events JOIN users (cross-DB), `aggregations: [{ column: 'id', table: 'users', function: 'count', alias: 'x"; DROP TABLE users;--' }]` | rejected or double-quote escaped; no injection |
+| C1450 | Trino HAVING referencing injected alias | events JOIN users, `aggregations: [{ column: 'id', table: 'users', function: 'count', alias: 'x"; --' }]`, `having: [{ alias: 'x"; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in Trino HAVING clause |
+| C1451 | Trino ORDER BY referencing injected alias | events JOIN users, `aggregations: [{ column: 'id', table: 'users', function: 'count', alias: 'x"; --' }]`, `orderBy: [{ column: 'x"; --', direction: 'asc' }]` | rejected or escaped; no injection in Trino ORDER BY clause |
 
 ### 16.3 PostgreSQL Filter Value Injection
 
@@ -836,7 +842,6 @@ These tests target ch-analytics tables (events), exercising ClickHouse's typed `
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
 | C1416 | CH `=` filter injection | events, `type = "'; DROP TABLE events; --"` | value parameterized via `{pN:String}`; no injection |
-| C1418 | CH column name injection | events, `columns: ['id`; DROP TABLE events; --']` | `UNKNOWN_COLUMN` error |
 | C1423 | CH `in` filter injection | events, `type in ["purchase'; DROP TABLE events; --"]` | expanded `IN tuple({p1:String}, ...)` — each element individually typed; no injection |
 | C1424 | CH `contains` filter injection | events, `type contains "'; DROP TABLE events; --"` | escapeLike applied, parameterized via `{pN:String}`; no injection |
 | C1425 | CH `between` filter injection | events, `timestamp between { from: "2024-01-01'; DROP TABLE events; --", to: "2024-12-31" }` | both bounds parameterized via `{p1:DateTime}` and `{p2:DateTime}`; no injection |
@@ -849,6 +854,7 @@ These tests target ch-analytics tables (events), exercising ClickHouse's typed `
 | C1440 | CH `arrayContainsAll` injection | events, `tags arrayContainsAll ["x'; DROP TABLE events; --"]` | `hasAll(col, [{p1:String}, ...])`; each element parameterized; no injection |
 | C1417 | CH `arrayContainsAny` injection | events, `tags arrayContainsAny ["x'; DROP TABLE events; --"]` | `hasAny(col, [{p1:String}, ...])`; each element parameterized; no injection |
 | C1441 | CH `notIn` injection | events, `type notIn ["purchase'; DROP TABLE events; --"]` | `NOT IN tuple({p1:String}, ...)` — each element individually typed; no injection |
+| C1446 | CH `byIds` injection | events, `byIds: ["'; DROP TABLE events; --"]` | resolved as `IN tuple({p1:String}, ...)` on PK; each value individually typed; no injection |
 
 ### 16.5 Trino Filter Value Injection
 
@@ -857,15 +863,15 @@ These tests use cross-DB joins (events + users/products), forcing Trino as the e
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
 | C1420 | Trino `=` filter injection | events JOIN users (ch-analytics + pg-main), filter `users.email = "'; DROP TABLE users; --"` | Trino `?` parameterization; no injection |
-| C1421 | Trino column name injection | events JOIN users, `columns: ['id"; DROP TABLE users; --']` on users side | `UNKNOWN_COLUMN` error |
 | C1428 | Trino `in` filter injection | events JOIN users, filter `users.email in ["x'; DROP TABLE users; --"]` | expanded `IN (?, ?, ...)` — each element individually parameterized; no injection |
 | C1429 | Trino `contains` filter injection | events JOIN users, filter `users.email contains "'; DROP TABLE users; --"` | escapeLike applied, `LIKE ? ESCAPE '\\'` — Trino-specific ESCAPE clause; no injection |
 | C1430 | Trino `levenshteinLte` injection | events JOIN users, filter `users.firstName levenshteinLte { text: "'; DROP TABLE users; --", maxDistance: 5 }` | `levenshtein_distance(col, ?) <= ?`; both params via `?`; no injection |
 | C1442 | Trino `icontains` injection | events JOIN users, filter `users.email icontains "'; DROP TABLE users; --"` | `lower(col) LIKE lower(?) ESCAPE '\\'`; Trino `lower()` emulation + ESCAPE; no injection |
 | C1443 | Trino `arrayContains` injection | events JOIN users and products, filter `products.labels arrayContains "x'; DROP TABLE products; --"` | `contains(col, ?)`; value parameterized; no injection |
 | C1444 | Trino `arrayContainsAll` injection | events JOIN users and products, filter `products.labels arrayContainsAll ["x'; DROP TABLE products; --"]` | `cardinality(array_except(ARRAY[?, ...], col)) = 0`; each element parameterized; no injection |
-| C1445 | Trino `arrayContainsAny` injection | events JOIN users and products, filter `products.labels arrayContainsAny ["x'; DROP TABLE products; --"]` | `arrays_overlap(col, ARRAY[?, ...])`; each element parameterized; no injection |
-
+| C1445 | Trino `arrayContainsAny` injection | events JOIN users and products, filter `products.labels arrayContainsAny ["x'; DROP TABLE products; --"]` | `arrays_overlap(col, ARRAY[?, ...])` — each element parameterized; no injection |
+| C1452 | Trino `notIn` injection | events JOIN users, filter `users.email notIn ["x'; DROP TABLE users; --"]` | `NOT IN (?, ?, ...)` — each element individually parameterized; no injection |
+| C1447 | Trino `byIds` injection | events JOIN users, `byIds: ["'; DROP TABLE users; --"]` on users table (cross-DB) | resolved as `IN (?, ?, ...)` on PK; each value parameterized; no injection |
 ---
 
 ## 17. Validation Endpoints
@@ -945,10 +951,10 @@ For implementation developers, verify the following groups pass in order:
 14. **Validation Errors** (C900-C1030) — all 14 rules verified (via /query)
 15. **Meta Verification** (C1100-C1108) — response metadata correctness
 16. **Error Deserialization** (C1200-C1205) — HTTP error transport
-17. **SQL Injection** (C1400-C1406) — security
+17. **SQL Injection** (C1400-C1452) — per-dialect parameterization, identifier validation, alias escaping
 18. **Edge Cases** (C1700-C1714) — nulls, types, strategies, distinct+count, empty groups
 
-Total: **328 contract tests**
+Total: **335 contract tests**
 
 ---
 
