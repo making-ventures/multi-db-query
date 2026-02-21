@@ -48,7 +48,6 @@ export interface WhereCondition {
   column: ColumnRef | string
   operator: string
   paramIndex?: number | undefined
-  literal?: string | undefined
   columnType?: string | undefined
 }
 

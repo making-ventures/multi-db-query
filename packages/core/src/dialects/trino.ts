@@ -147,9 +147,7 @@ class TrinoGenerator {
     if (op === 'isNull') return `${col} IS NULL`
     if (op === 'isNotNull') return `${col} IS NOT NULL`
 
-    if (c.paramIndex === undefined) {
-      return c.literal !== undefined ? `${col} ${op} ${c.literal}` : `${col} ${op}`
-    }
+    if (c.paramIndex === undefined) return `${col} ${op}`
 
     // in — expand array to IN (?, ?, ...)
     if (op === 'in') {

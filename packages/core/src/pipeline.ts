@@ -60,7 +60,7 @@ export async function createMultiDb(options: CreateMultiDbOptions): Promise<Mult
 
   // Step 5: ping all executors + cache providers
   if (options.validateConnections !== false) {
-    await pingAllOrThrow(executors, cacheProviders)
+    await pingAllOrThrow(executors, cacheProviders, registry.getSnapshot())
   }
 
   let closed = false
@@ -87,7 +87,7 @@ export async function createMultiDb(options: CreateMultiDbOptions): Promise<Mult
 
     async close() {
       closed = true
-      await closeAll(executors, cacheProviders)
+      await closeAll(executors, cacheProviders, registry.getSnapshot())
     },
   }
 }
@@ -638,24 +638,38 @@ function walkWhereSubqueries(node: WhereNode | undefined, handler: (sub: Correla
 
 // ── Ping / Health / Close ──────────────────────────────────────
 
+function resolveEngineById(id: string, snapshot: RegistrySnapshot): 'postgres' | 'clickhouse' | 'trino' | undefined {
+  const db = snapshot.config.databases.find((d) => d.id === id)
+  if (!db) return undefined
+  if (db.engine === 'iceberg') return 'trino'
+  return db.engine
+}
+
 async function pingAllOrThrow(
   executors: Record<string, DbExecutor>,
   cacheProviders: Record<string, CacheProvider>,
+  snapshot: RegistrySnapshot,
 ): Promise<void> {
-  const unreachable: Array<{ id: string; type: 'executor' | 'cache'; cause?: Error | undefined }> = []
+  const unreachable: Array<{
+    id: string
+    type: 'executor' | 'cache'
+    engine?: 'postgres' | 'clickhouse' | 'trino' | 'redis' | undefined
+    cause?: Error | undefined
+  }> = []
 
   for (const [id, ex] of Object.entries(executors)) {
     try {
       await ex.ping()
     } catch (err) {
-      unreachable.push({ id, type: 'executor', cause: err instanceof Error ? err : undefined })
+      const engine = id === 'trino' ? 'trino' : resolveEngineById(id, snapshot)
+      unreachable.push({ id, type: 'executor', engine, cause: err instanceof Error ? err : undefined })
     }
   }
   for (const [id, cp] of Object.entries(cacheProviders)) {
     try {
       await cp.ping()
     } catch (err) {
-      unreachable.push({ id, type: 'cache', cause: err instanceof Error ? err : undefined })
+      unreachable.push({ id, type: 'cache', engine: 'redis', cause: err instanceof Error ? err : undefined })
     }
   }
 
@@ -710,21 +724,28 @@ async function measureHealth(
 async function closeAll(
   executors: Record<string, DbExecutor>,
   cacheProviders: Record<string, CacheProvider>,
+  snapshot: RegistrySnapshot,
 ): Promise<void> {
-  const failures: Array<{ id: string; type: 'executor' | 'cache'; cause?: Error | undefined }> = []
+  const failures: Array<{
+    id: string
+    type: 'executor' | 'cache'
+    engine?: 'postgres' | 'clickhouse' | 'trino' | 'redis' | undefined
+    cause?: Error | undefined
+  }> = []
 
   for (const [id, ex] of Object.entries(executors)) {
     try {
       await ex.close()
     } catch (err) {
-      failures.push({ id, type: 'executor', cause: err instanceof Error ? err : undefined })
+      const engine = id === 'trino' ? 'trino' : resolveEngineById(id, snapshot)
+      failures.push({ id, type: 'executor', engine, cause: err instanceof Error ? err : undefined })
     }
   }
   for (const [id, cp] of Object.entries(cacheProviders)) {
     try {
       await cp.close()
     } catch (err) {
-      failures.push({ id, type: 'cache', cause: err instanceof Error ? err : undefined })
+      failures.push({ id, type: 'cache', engine: 'redis', cause: err instanceof Error ? err : undefined })
     }
   }
 
