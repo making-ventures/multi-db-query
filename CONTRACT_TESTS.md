@@ -88,7 +88,6 @@ Tests assert on:
 | id | engine | trinoCatalog |
 |---|---|---|
 | `pg-main` | postgres | `pg_main` |
-| `pg-tenant` | postgres | `pg_tenant` |
 | `ch-analytics` | clickhouse | `ch_analytics` |
 
 Trino: `{ enabled: true }`
@@ -140,17 +139,19 @@ Trino: `{ enabled: true }`
 | lastName | last_name | string | false | name |
 | role | role | string | false | — |
 | age | age | int | true | — |
+| managerId | manager_id | uuid | true | — |
 | createdAt | created_at | timestamp | false | — |
 
 - Primary key: `[id]`
-- Relations: none
+- Relations:
+  - `managerId → users.id` (many-to-one, self-referencing)
 
 #### invoices (pg-main)
 
 | apiName | physicalName | type | nullable | maskingFn |
 |---|---|---|---|---|
 | id | id | uuid | false | — |
-| orderId | order_id | uuid | true | — |
+| orderId | order_id | int | true | — |
 | amount | amount | decimal | false | number |
 | status | status | string | false | — |
 | issuedAt | issued_at | timestamp | false | — |
@@ -168,7 +169,7 @@ Trino: `{ enabled: true }`
 | id | id | uuid | false | — |
 | type | event_type | string | false | — |
 | userId | user_id | uuid | false | — |
-| orderId | order_id | uuid | true | — |
+| orderId | order_id | int | true | — |
 | payload | payload | string | true | full |
 | tags | tags | string[] | true | — |
 | timestamp | event_ts | timestamp | false | — |
@@ -177,6 +178,20 @@ Trino: `{ enabled: true }`
 - Relations:
   - `userId → users.id` (many-to-one)
   - `orderId → orders.id` (many-to-one)
+
+#### orderItems (pg-main)
+
+| apiName | physicalName | type | nullable | maskingFn |
+|---|---|---|---|---|
+| orderId | order_id | int | false | — |
+| productId | product_id | uuid | false | — |
+| quantity | quantity | int | false | — |
+| unitPrice | unit_price | decimal | false | — |
+
+- Primary key: `[orderId, productId]` *(composite)*
+- Relations:
+  - `orderId → orders.id` (many-to-one)
+  - `productId → products.id` (many-to-one)
 
 ### External Syncs (Debezium)
 
@@ -198,8 +213,11 @@ The `redis-main` cache provider enables `byIds` queries on `users` to be served 
 |---|---|
 | `admin` | `'*'` (all tables, all columns, no masking) |
 | `tenant-user` | orders: `[id, total, status, createdAt]`, maskedColumns: `[total]`; users: `[id, firstName, lastName, email]`, maskedColumns: `[email]`; products: `[id, name, category, price]` |
+| `analyst` | orders: `[id, total, status, internalNote, createdAt]`, maskedColumns: `[internalNote]`; users: `[id, firstName, lastName, email, phone]`, maskedColumns: `[phone, firstName, lastName]`; products: `[id, name, category, price]`, maskedColumns: `[price]`; invoices: `[id, orderId, amount, status]`, maskedColumns: `[amount]` |
+| `viewer` | orders: `[id, status, createdAt, quantity]`; users: `[id, firstName]` |
 | `no-access` | `[]` (empty — zero permissions) |
 | `orders-service` | orders: `'*'`; products: `'*'`; users: `[id, firstName, lastName]` |
+| `reporting-service` | orders: `[id, total, status, createdAt]`, maskedColumns: `[total]`; products: `'*'` |
 
 ### Seed Data
 
@@ -225,11 +243,11 @@ The implementation must populate tables with deterministic data so assertions on
 
 **users** (minimum 3 rows):
 
-| id | email | phone | firstName | lastName | role | age | createdAt |
-|---|---|---|---|---|---|---|---|
-| uuid-c1 | alice@example.com | +1234567890 | Alice | Smith | admin | 30 | 2023-01-01T00:00:00Z |
-| uuid-c2 | bob@example.com | null | Bob | Jones | viewer | 25 | 2023-06-15T00:00:00Z |
-| uuid-c3 | carol@example.com | +9876543210 | Carol | Williams | viewer | null | 2024-01-01T00:00:00Z |
+| id | email | phone | firstName | lastName | role | age | managerId | createdAt |
+|---|---|---|---|---|---|---|---|---|
+| uuid-c1 | alice@example.com | +1234567890 | Alice | Smith | admin | 30 | null | 2023-01-01T00:00:00Z |
+| uuid-c2 | bob@example.com | null | Bob | Jones | viewer | 25 | uuid-c1 | 2023-06-15T00:00:00Z |
+| uuid-c3 | carol@example.com | +9876543210 | Carol | Williams | viewer | null | uuid-c1 | 2024-01-01T00:00:00Z |
 
 **invoices** (minimum 3 rows):
 
@@ -246,6 +264,15 @@ The implementation must populate tables with deterministic data so assertions on
 | uuid-e1 | purchase | uuid-c1 | 1 | {"action":"buy"} | ["urgent", "vip"] | 2024-01-15T10:05:00Z |
 | uuid-e2 | view | uuid-c2 | null | null | null | 2024-02-20T14:00:00Z |
 | uuid-e3 | purchase | uuid-c1 | 3 | {"action":"buy"} | ["urgent"] | 2024-03-10T08:20:00Z |
+
+**orderItems** (pg-main, minimum 4 rows):
+
+| orderId | productId | quantity | unitPrice |
+|---|---|---|---|
+| 1 | uuid-p1 | 2 | 25.00 |
+| 1 | uuid-p2 | 1 | 40.00 |
+| 2 | uuid-p2 | 5 | 40.00 |
+| 5 | uuid-p3 | 3 | 15.00 |
 
 ---
 
@@ -480,6 +507,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C502 | byIds with count mode | orders, `byIds: [1, 2, 3]`, `executeMode: 'count'` | `kind === 'count'`; `count === 3` |
 | C503 | byIds with join | orders, `byIds: [1, 2]`, join products | id + product data returned |
 | C504 | byIds with column selection | orders, `byIds: [1]`, columns: [id, status] | only selected columns returned |
+| C505 | byIds with composite PK | orderItems, `byIds: [{ orderId: 1, productId: 'uuid-p1' }, { orderId: 2, productId: 'uuid-p2' }]` | exactly 2 rows matching compound keys |
 
 ---
 
@@ -491,10 +519,11 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C601 | NOT EXISTS filter | orders WHERE NOT EXISTS invoices (`exists: false`) | only orders without invoices |
 | C602 | EXISTS with subquery filter | orders WHERE EXISTS invoices(status = 'paid') | only orders with paid invoices |
 | C603 | EXISTS inside OR group | orders WHERE `(status = 'active' OR EXISTS invoices)` | combined logic |
-| C604 | Nested EXISTS | orders WHERE EXISTS invoices WHERE EXISTS ... (if relation chain available) | multi-level EXISTS |
+| C604 | Nested EXISTS | users WHERE EXISTS orders WHERE EXISTS invoices (2-hop reverse FK chain within pg-main) | multi-level EXISTS |
 | C605 | Counted EXISTS (>=) | orders WHERE EXISTS invoices `count: { operator: '>=', value: 2 }` | orders with >= 2 invoices (order id=1 has 2 invoices) |
 | C606 | Counted EXISTS (=) | orders WHERE EXISTS invoices `count: { operator: '=', value: 1 }` | orders with exactly 1 invoice |
 | C607 | Counted EXISTS ignores `exists` field | orders, `exists: false`, `count: { operator: '>=', value: 1 }` | `exists` is ignored — counted subquery decides direction |
+| C608 | Self-referencing EXISTS | users WHERE EXISTS users (via managerId → users.id) | only users who manage other users (uuid-c1 has subordinates) |
 
 ---
 
@@ -517,13 +546,13 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
 | C710 | Union of two user roles | orders, `user: ['tenant-user', 'admin']` | all columns visible (admin overrides) |
-| C711 | Union adds permissions | orders, context that gives combined column access via multiple roles | effective columns = union of both role's allowed columns |
+| C711 | Union adds permissions | orders, `user: ['tenant-user', 'viewer']` | effective columns = `[id, total, status, createdAt, quantity]` (tenant-user: id,total,status,createdAt + viewer: id,status,createdAt,quantity) |
 
 ### 10.3 Cross-Scope (Intersection)
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C720 | Admin user + service restriction | orders, `user: ['admin'], service: ['orders-service']` | access restricted to orders-service's allowed columns for users table |
+| C720 | Admin user + service restriction | orders JOIN users, `user: ['admin'], service: ['orders-service']` | orders: all columns (admin ∩ orders-service `'*'` = all); users: restricted to `[id, firstName, lastName]` (admin ∩ orders-service) |
 | C721 | Empty scope intersection **(negative)** | events, `user: ['tenant-user'], service: ['orders-service']` | tenant-user has no events access; orders-service has no events access → `ACCESS_DENIED` |
 | C722 | Omitted scope = no restriction | orders, `user: ['admin']` (no service scope) | full admin access; service scope imposes no restriction |
 | C723 | One scope with zero roles **(negative)** | orders, `user: [], service: ['orders-service']` | user scope has zero roles → zero permissions → `ACCESS_DENIED` regardless of service |
@@ -537,12 +566,17 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C800 | Masked column reported in meta | orders columns: [id, total] (tenant-user) | `meta.columns.find(c => c.apiName === 'total').masked === true`; id: `false` |
 | C801 | Admin sees unmasked | orders columns: [id, total] (admin) | `meta.columns.find(c => c.apiName === 'total').masked === false` |
 | C802 | Masked value is obfuscated (number) | orders columns: [total] (tenant-user) | `data[0].total === 0` (numbermasking → replace with 0) |
-| C803 | Masked value (full) | orders columns: [id, internalNote] (admin with masking on internalNote via some role) or add custom role | `data[0].internalNote === '***'` |
+| C803 | Masked value (full) | orders columns: [id, internalNote] (analyst) | `data[0].internalNote === '***'` (analyst has internalNote with maskingFn `full`) |
 | C804 | Masking on email column | users columns: [email] (tenant-user) | email is masked: first char + domain hint (e.g. `a***@***.com`) |
 | C805 | Aggregation alias never masked | orders (tenant-user), GROUP BY status, SUM(total) as totalSum | `meta.columns.find(c => c.apiName === 'totalSum').masked === false` — aggregation aliases are never masked |
 | C806 | sql-only reports masking intent | orders columns: [id, total], executeMode: 'sql-only' (tenant-user) | `meta.columns.find(c => c.apiName === 'total').masked === true` — no data, but intent reported |
 | C807 | Multi-role masking (union unmasks) | orders, `user: ['tenant-user', 'admin']` | admin provides unmasked access → `total.masked === false` (union within scope: most permissive wins) |
-| C808 | Cross-scope masking preserved | orders, user scope unmasks total, service scope masks it | `total.masked === true` (scope intersection: any scope masking it → stays masked) |
+| C808 | Cross-scope masking preserved | orders columns: [id, total], `user: ['admin'], service: ['reporting-service']` | `total.masked === true` (admin unmasks, reporting-service masks total → intersection: stays masked) |
+| C809 | Masked value (phone) | users columns: [id, phone] (analyst) | phone is masked: e.g. `+1******890` (phone masking → partial reveal) |
+| C810 | Masked value (name) | users columns: [id, firstName, lastName] (analyst) | firstName/lastName masked: e.g. `A***` (name masking → first char + stars) |
+| C811 | Masked value (number on price) | products columns: [id, price] (analyst) | `data[0].price === 0` (number masking on price) |
+| C812 | Masked value (number on amount) | invoices columns: [id, amount] (analyst) | `data[0].amount === 0` (number masking on amount) |
+| C813 | Multiple masking functions in one query | users columns: [id, email, phone, firstName] (analyst) | email: `false` (analyst has no email masking); phone: `true`; firstName: `true` — different functions on different columns |
 
 ---
 
@@ -797,6 +831,9 @@ These tests verify the dedicated validation endpoints that run without DB connec
 | C1707 | Array column in result | products columns: [name, labels] | `labels` is JSON array (e.g. `["sale", "new"]`) or null |
 | C1708 | Decimal precision | orders columns: [total] | `total` is a number with decimal precision preserved |
 | C1709 | Multiple filters (implicit AND) | orders, 2 top-level filters | both filter conditions applied (AND logic) |
+| C1710 | Cache strategy reported | users, `byIds: ['uuid-c1']` (admin) | `meta.strategy === 'cache'` — users table has `redis-main` cache configured |
+| C1711 | Materialized replica query | orders (admin), query routed to `orders_replica` | `meta.strategy === 'materialized'` — Debezium synced replica used |
+| C1712 | Cross-DB Trino join | events JOIN users (ch-analytics + pg-main, admin) | `meta.strategy === 'trino-cross-db'` — Trino used to join across databases |
 
 ---
 
@@ -813,17 +850,17 @@ For implementation developers, verify the following groups pass in order:
 7. **Aggregations** (C300-C309) — all 5 functions, groupBy interaction
 8. **GROUP BY & HAVING** (C320-C328) — grouping + HAVING conditions
 9. **ORDER BY, LIMIT, OFFSET, DISTINCT** (C400-C407) — pagination + sorting
-10. **byIds** (C500-C504) — primary key shortcut
-11. **EXISTS** (C600-C607) — subqueries, counted variant
+10. **byIds** (C500-C505) — primary key shortcut, composite keys
+11. **EXISTS** (C600-C608) — subqueries, counted variant, self-referencing
 12. **Access Control** (C700-C723) — roles, scopes, intersection
-13. **Masking** (C800-C808) — column masking, meta reporting
+13. **Masking** (C800-C813) — all masking functions, multi-role, cross-scope
 14. **Validation Errors** (C900-C1030) — all 14 rules verified (via /query)
 15. **Meta Verification** (C1100-C1108) — response metadata correctness
 16. **Error Deserialization** (C1200-C1205) — HTTP error transport
 17. **SQL Injection** (C1400-C1406) — security
-18. **Edge Cases** (C1700-C1709) — nulls, types, empty results
+18. **Edge Cases** (C1700-C1712) — nulls, types, cache/materialized/Trino strategies
 
-Total: **~265 contract tests**
+Total: **~275 contract tests**
 
 ---
 
