@@ -213,7 +213,7 @@ The `redis-main` cache provider enables `byIds` queries on `users` to be served 
 |---|---|
 | `admin` | `'*'` (all tables, all columns, no masking) |
 | `tenant-user` | orders: `[id, total, status, createdAt]`, maskedColumns: `[total]`; users: `[id, firstName, lastName, email]`, maskedColumns: `[email]`; products: `[id, name, category, price]` |
-| `analyst` | orders: `[id, total, status, internalNote, createdAt]`, maskedColumns: `[internalNote]`; users: `[id, firstName, lastName, email, phone]`, maskedColumns: `[phone, firstName, lastName]`; products: `[id, name, category, price]`, maskedColumns: `[price]`; invoices: `[id, orderId, amount, status]`, maskedColumns: `[amount]` |
+| `analyst` | orders: `[id, total, status, internalNote, createdAt]`, maskedColumns: `[internalNote, createdAt]`; users: `[id, firstName, lastName, email, phone]`, maskedColumns: `[phone, firstName, lastName]`; products: `[id, name, category, price]`, maskedColumns: `[price]`; invoices: `[id, orderId, amount, status]`, maskedColumns: `[amount]` |
 | `viewer` | orders: `[id, status, createdAt, quantity]`; users: `[id, firstName]` |
 | `no-access` | `[]` (empty — zero permissions) |
 | `orders-service` | orders: `'*'`; products: `'*'`; users: `[id, firstName, lastName]` |
@@ -253,9 +253,9 @@ The implementation must populate tables with deterministic data so assertions on
 
 | id | orderId | amount | status | issuedAt | paidAt | dueDate |
 |---|---|---|---|---|---|---|
-| uuid-i1 | 1 (order id) | 100.00 | paid | 2024-01-20T00:00:00Z | 2024-01-25T00:00:00Z | 2024-02-20 |
-| uuid-i2 | 2 (order id) | 200.00 | pending | 2024-02-25T00:00:00Z | null | 2024-03-25 |
-| uuid-i3 | 1 (order id) | 50.00 | paid | 2024-01-22T00:00:00Z | 2024-01-28T00:00:00Z | null |
+| uuid-i1 | 1 | 100.00 | paid | 2024-01-20T00:00:00Z | 2024-01-25T00:00:00Z | 2024-02-20 |
+| uuid-i2 | 2 | 200.00 | pending | 2024-02-25T00:00:00Z | null | 2024-03-25 |
+| uuid-i3 | 1 | 50.00 | paid | 2024-01-22T00:00:00Z | 2024-01-28T00:00:00Z | null |
 
 **events** (ch-analytics, minimum 3 rows):
 
@@ -464,6 +464,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C307 | Aggregation on joined column | orders JOIN products, `SUM(products.price) as totalPrice` | aggregation references joined table |
 | C308 | Aggregation-only (`columns: []`) | orders `columns: []`, `SUM(total) as totalSum` | only aggregation alias in result — no regular columns |
 | C309 | `columns: undefined` + aggregations + groupBy | orders, groupBy: [status], `SUM(total) as totalSum` (columns omitted) | result includes `status` (from groupBy) + `totalSum`; omitted columns defers to groupBy columns only |
+| C310 | SUM on nullable column | orders, `SUM(discount) as discountSum` | NULLs are skipped; result is sum of non-null discounts (10.00 + 5.00 + 0.00 = 15.00) |
 
 ---
 
@@ -508,6 +509,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C503 | byIds with join | orders, `byIds: [1, 2]`, join products | id + product data returned |
 | C504 | byIds with column selection | orders, `byIds: [1]`, columns: [id, status] | only selected columns returned |
 | C505 | byIds with composite PK | orderItems, `byIds: [{ orderId: 1, productId: 'uuid-p1' }, { orderId: 2, productId: 'uuid-p2' }]` | exactly 2 rows matching compound keys |
+| C506 | byIds with filter | orders, `byIds: [1, 2, 3]`, `filters: [{ column: 'status', operator: '=', value: 'active' }]` | returns intersection — only order id=1 (active with id in [1,2,3]); order 2 is 'paid', order 3 is 'cancelled' |
 
 ---
 
@@ -524,6 +526,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C606 | Counted EXISTS (=) | orders WHERE EXISTS invoices `count: { operator: '=', value: 1 }` | orders with exactly 1 invoice |
 | C607 | Counted EXISTS ignores `exists` field | orders, `exists: false`, `count: { operator: '>=', value: 1 }` | `exists` is ignored — counted subquery decides direction |
 | C608 | Self-referencing EXISTS | users WHERE EXISTS users (via managerId → users.id) | only users who manage other users (uuid-c1 has subordinates) |
+| C609 | EXISTS with join | orders JOIN products WHERE EXISTS invoices | only orders that have invoices, with product data included |
 
 ---
 
@@ -565,7 +568,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 |---|---|---|---|
 | C800 | Masked column reported in meta | orders columns: [id, total] (tenant-user) | `meta.columns.find(c => c.apiName === 'total').masked === true`; id: `false` |
 | C801 | Admin sees unmasked | orders columns: [id, total] (admin) | `meta.columns.find(c => c.apiName === 'total').masked === false` |
-| C802 | Masked value is obfuscated (number) | orders columns: [total] (tenant-user) | `data[0].total === 0` (numbermasking → replace with 0) |
+| C802 | Masked value is obfuscated (number) | orders columns: [total] (tenant-user) | `data[0].total === 0` (number masking → replace with 0) |
 | C803 | Masked value (full) | orders columns: [id, internalNote] (analyst) | `data[0].internalNote === '***'` (analyst has internalNote with maskingFn `full`) |
 | C804 | Masking on email column | users columns: [email] (tenant-user) | email is masked: first char + domain hint (e.g. `a***@***.com`) |
 | C805 | Aggregation alias never masked | orders (tenant-user), GROUP BY status, SUM(total) as totalSum | `meta.columns.find(c => c.apiName === 'totalSum').masked === false` — aggregation aliases are never masked |
@@ -577,6 +580,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C811 | Masked value (number on price) | products columns: [id, price] (analyst) | `data[0].price === 0` (number masking on price) |
 | C812 | Masked value (number on amount) | invoices columns: [id, amount] (analyst) | `data[0].amount === 0` (number masking on amount) |
 | C813 | Multiple masking functions in one query | users columns: [id, email, phone, firstName] (analyst) | email: `false` (analyst has no email masking); phone: `true`; firstName: `true` — different functions on different columns |
+| C814 | Masked value (date) | orders columns: [id, createdAt] (analyst) | `createdAt` is masked: e.g. `'2024-01-01T00:00:00Z'` (date masking → zero out time/day components) |
 
 ---
 
@@ -682,6 +686,8 @@ All tests in this section expect the query to throw `ValidationError` with `code
 |---|---|---|
 | C990 | Empty byIds array | `INVALID_BY_IDS` |
 | C991 | byIds + aggregations | `INVALID_BY_IDS` |
+| C992 | byIds scalar on composite PK | orderItems, `byIds: [1, 2]` (scalar values for composite PK table) | `INVALID_BY_IDS` |
+| C993 | byIds missing key in composite PK | orderItems, `byIds: [{ orderId: 1 }]` (missing `productId`) | `INVALID_BY_IDS` |
 
 ### 12.10 Limit/Offset Validity
 
@@ -832,8 +838,10 @@ These tests verify the dedicated validation endpoints that run without DB connec
 | C1708 | Decimal precision | orders columns: [total] | `total` is a number with decimal precision preserved |
 | C1709 | Multiple filters (implicit AND) | orders, 2 top-level filters | both filter conditions applied (AND logic) |
 | C1710 | Cache strategy reported | users, `byIds: ['uuid-c1']` (admin) | `meta.strategy === 'cache'` — users table has `redis-main` cache configured |
-| C1711 | Materialized replica query | orders (admin), query routed to `orders_replica` | `meta.strategy === 'materialized'` — Debezium synced replica used |
+| C1711 | Materialized replica query | orders (admin), `preferStrategy: 'materialized'` | `meta.strategy === 'materialized'`; `meta.tablesUsed[0].source === 'replica'` — planner routes to Debezium-synced `orders_replica` on ch-analytics |
 | C1712 | Cross-DB Trino join | events JOIN users (ch-analytics + pg-main, admin) | `meta.strategy === 'trino-cross-db'` — Trino used to join across databases |
+| C1713 | DISTINCT + count mode | orders, `distinct: true, columns: [status], executeMode: 'count'` | `kind === 'count'`; count equals number of distinct statuses (4: active, paid, cancelled, shipped) |
+| C1714 | GROUP BY with zero matching rows | orders, `status = 'nonexistent'`, groupBy: [status], SUM(total) | `kind === 'data'`; `data` is empty array; `meta.columns` still present |
 
 ---
 
@@ -847,20 +855,20 @@ For implementation developers, verify the following groups pass in order:
 4. **Debug Mode** (C030-C034) — debug logging works
 5. **Filtering** (C100-C196) — all 31 operators + groups + qualifiers
 6. **Joins** (C200-C207) — left/inner, multi-table, column selection
-7. **Aggregations** (C300-C309) — all 5 functions, groupBy interaction
+7. **Aggregations** (C300-C310) — all 5 functions, groupBy interaction, NULLs
 8. **GROUP BY & HAVING** (C320-C328) — grouping + HAVING conditions
 9. **ORDER BY, LIMIT, OFFSET, DISTINCT** (C400-C407) — pagination + sorting
-10. **byIds** (C500-C505) — primary key shortcut, composite keys
-11. **EXISTS** (C600-C608) — subqueries, counted variant, self-referencing
+10. **byIds** (C500-C506) — primary key shortcut, composite keys, filter combo
+11. **EXISTS** (C600-C609) — subqueries, counted variant, self-referencing, join combo
 12. **Access Control** (C700-C723) — roles, scopes, intersection
-13. **Masking** (C800-C813) — all masking functions, multi-role, cross-scope
+13. **Masking** (C800-C814) — all 7 masking functions, multi-role, cross-scope
 14. **Validation Errors** (C900-C1030) — all 14 rules verified (via /query)
 15. **Meta Verification** (C1100-C1108) — response metadata correctness
 16. **Error Deserialization** (C1200-C1205) — HTTP error transport
 17. **SQL Injection** (C1400-C1406) — security
-18. **Edge Cases** (C1700-C1712) — nulls, types, cache/materialized/Trino strategies
+18. **Edge Cases** (C1700-C1714) — nulls, types, strategies, distinct+count, empty groups
 
-Total: **~275 contract tests**
+Total: **~280 contract tests**
 
 ---
 
