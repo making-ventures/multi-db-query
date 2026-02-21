@@ -831,6 +831,7 @@ These tests target pg-main tables, exercising PostgreSQL's `$N` parameterization
 | C1431 | PG `icontains` injection | users, `email icontains "'; DROP TABLE users; --"` | `ILIKE $1` (native keyword); no injection |
 | C1432 | PG `notBetween` injection | orders, `total notBetween { from: "0; DROP TABLE orders", to: 100 }` | `NOT BETWEEN $1 AND $2`; both parameterized; no injection |
 | C1433 | PG `endsWith` injection | users, `email endsWith "'; DROP TABLE users; --"` | `LIKE $1` with `%escaped` pattern; parameterized; no injection |
+| C1453 | PG `startsWith` injection | users, `email startsWith "'; DROP TABLE users; --"` | `LIKE $1` with `escaped%` pattern; parameterized; no injection |
 | C1434 | PG `arrayContainsAll` injection | products, `labels arrayContainsAll ["sale'; DROP TABLE products; --"]` | `col @> $1::text[]` — PG array containment operator; no injection |
 | C1435 | PG `arrayContainsAny` injection | products, `labels arrayContainsAny ["sale'; DROP TABLE products; --"]` | `col && $1::text[]` — PG array overlap operator; no injection |
 | C1410 | PG `byIds` injection | users, `byIds: ["'; DROP TABLE users; --"]` | resolved as `= ANY($1::uuid[])` on PK; value parameterized; no injection |
@@ -855,10 +856,11 @@ These tests target ch-analytics tables (events), exercising ClickHouse's typed `
 | C1417 | CH `arrayContainsAny` injection | events, `tags arrayContainsAny ["x'; DROP TABLE events; --"]` | `hasAny(col, [{p1:String}, ...])`; each element parameterized; no injection |
 | C1441 | CH `notIn` injection | events, `type notIn ["purchase'; DROP TABLE events; --"]` | `NOT IN tuple({p1:String}, ...)` — each element individually typed; no injection |
 | C1446 | CH `byIds` injection | events, `byIds: ["'; DROP TABLE events; --"]` | resolved as `IN tuple({p1:String}, ...)` on PK; each value individually typed; no injection |
+| C1454 | CH `like` injection | events, `type like "%'; DROP TABLE events; --%"` | value parameterized via `{pN:String}`; no injection |
 
 ### 16.5 Trino Filter Value Injection
 
-These tests use cross-DB joins (events + users/products), forcing Trino as the executor. This exercises Trino's `?` parameterization, `lower(col) LIKE lower(?) ESCAPE '\\'` emulation, `contains()`, `arrays_overlap()`, `array_except()`, and `levenshtein_distance()`.
+These tests use cross-DB joins (events + users/products), forcing Trino as the executor. This exercises Trino's `?` parameterization, `LIKE ? ESCAPE '\\'` pattern operators, `lower()` emulation for case-insensitive ops, `BETWEEN ? AND ?`, `NOT BETWEEN ? AND ?`, `contains()`, `arrays_overlap()`, `array_except()`, and `levenshtein_distance()`.
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
@@ -872,6 +874,11 @@ These tests use cross-DB joins (events + users/products), forcing Trino as the e
 | C1445 | Trino `arrayContainsAny` injection | events JOIN users and products, filter `products.labels arrayContainsAny ["x'; DROP TABLE products; --"]` | `arrays_overlap(col, ARRAY[?, ...])` — each element parameterized; no injection |
 | C1452 | Trino `notIn` injection | events JOIN users, filter `users.email notIn ["x'; DROP TABLE users; --"]` | `NOT IN (?, ?, ...)` — each element individually parameterized; no injection |
 | C1447 | Trino `byIds` injection | events JOIN users, `byIds: ["'; DROP TABLE users; --"]` on users table (cross-DB) | resolved as `IN (?, ?, ...)` on PK; each value parameterized; no injection |
+| C1455 | Trino `like` injection | events JOIN users, filter `users.email like "%'; DROP TABLE users; --%"` | `LIKE ?` parameterized; no injection |
+| C1456 | Trino `between` injection | events JOIN users, filter `users.age between { from: "0; DROP TABLE users", to: 100 }` | `BETWEEN ? AND ?`; both parameterized; no injection |
+| C1457 | Trino `notBetween` injection | events JOIN users, filter `users.age notBetween { from: "0; DROP TABLE users", to: 100 }` | `NOT BETWEEN ? AND ?`; both parameterized; no injection |
+| C1458 | Trino `startsWith` injection | events JOIN users, filter `users.email startsWith "'; DROP TABLE users; --"` | `LIKE ? ESCAPE '\\'`; parameterized; no injection |
+| C1459 | Trino `endsWith` injection | events JOIN users, filter `users.email endsWith "'; DROP TABLE users; --"` | `LIKE ? ESCAPE '\\'`; parameterized; no injection |
 ---
 
 ## 17. Validation Endpoints
@@ -951,10 +958,10 @@ For implementation developers, verify the following groups pass in order:
 14. **Validation Errors** (C900-C1030) — all 14 rules verified (via /query)
 15. **Meta Verification** (C1100-C1108) — response metadata correctness
 16. **Error Deserialization** (C1200-C1205) — HTTP error transport
-17. **SQL Injection** (C1400-C1452) — per-dialect parameterization, identifier validation, alias escaping
+17. **SQL Injection** (C1400-C1459) — per-dialect parameterization, identifier validation, alias escaping
 18. **Edge Cases** (C1700-C1714) — nulls, types, strategies, distinct+count, empty groups
 
-Total: **335 contract tests**
+Total: **342 contract tests**
 
 ---
 
