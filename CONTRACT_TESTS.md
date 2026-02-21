@@ -7,7 +7,7 @@ This document defines the **full contract test suite** for any implementation of
 - `POST /validate/query` — accepts `{ definition, context }`, returns `{ valid: true }` or throws `ValidationError` (400)
 - `POST /validate/config` — accepts `{ metadata, roles }`, returns `{ valid: true }` or throws `ConfigError` (400)
 
-The validation endpoints require **no database connections** — they run pure validation logic only. This means all validation tests (~60 tests in sections 12, 16) can run without a live database, enabling fast feedback during implementation.
+The validation endpoints require **no database connections** — they run pure validation logic only. This means all validation tests (~85 tests in sections 12 and 17) can run without a live database, enabling fast feedback during implementation.
 
 Any server (TypeScript, Go, Rust, Java, etc.) that wraps a multi-db query engine must pass all tests described here to be considered a conforming implementation.
 
@@ -42,6 +42,28 @@ describeQueryContract('http-client', async () => {
   const client = createMultiDbClient({ baseUrl: 'http://localhost:3000' })
   return client
 })
+```
+
+### ValidationContract Interface
+
+Validation endpoints have a separate contract:
+
+```ts
+interface ValidationContract {
+  validateQuery(input: ValidateQueryInput): Promise<ValidateResult>
+  validateConfig(input: ValidateConfigInput): Promise<ValidateResult>
+}
+```
+
+These tests require zero database I/O. `describeValidationContract()` accepts the contract, plus the fixture metadata and roles:
+
+```ts
+describeValidationContract(
+  'direct',
+  async () => { /* return ValidationContract impl */ },
+  metadata,
+  roles,
+)
 ```
 
 ### Test Fixture Requirements
@@ -793,7 +815,7 @@ For implementation developers, verify the following groups pass in order:
 17. **SQL Injection** (C1400-C1406) — security
 18. **Edge Cases** (C1700-C1709) — nulls, types, empty results
 
-Total: **~230 contract tests**
+Total: **~265 contract tests**
 
 ---
 
