@@ -785,25 +785,9 @@ These tests verify that errors transmitted over HTTP are properly reconstructed 
 
 These tests verify that user-provided inputs — filter values, column/table names, aggregation aliases, and subquery references — cannot inject SQL across **all three dialects** (PostgreSQL, ClickHouse, Trino). Each test sends a malicious value and asserts the query either succeeds safely (value treated as data, not code) or is properly rejected with a validation error.
 
-### 16.1 Filter Value Injection
+### 16.1 Identifier & Structural Injection (dialect-agnostic)
 
-| ID | Test | Definition | Assertions |
-|---|---|---|---|
-| C1400 | SQL injection in `=` filter value | orders, `status = "'; DROP TABLE orders; --"` | query succeeds; returned rows have the literal string as status; no table dropped |
-| C1401 | SQL injection in `like` filter value | users, `email like "%'; DROP TABLE users; --%"` | value parameterized; no injection |
-| C1402 | SQL injection in `contains` value | users, `email contains "'; DROP TABLE --"` | value escaped and parameterized |
-| C1403 | SQL injection in `between` value | orders, `total between { from: "0; DROP TABLE orders", to: 100 }` | rejected or treated as literal |
-| C1406 | SQL injection in `in` filter | orders, `status in ["active'; DROP TABLE orders; --"]` | value parameterized |
-| C1407 | SQL injection in `notIn` filter | orders, `status notIn ["active'; DROP TABLE orders; --"]` | value parameterized; no injection |
-| C1408 | SQL injection in `levenshteinLte` text | users, `firstName levenshteinLte { text: "'; DROP TABLE users; --", maxDistance: 3 }` | both `text` and `maxDistance` parameterized; no injection |
-| C1409 | SQL injection in `arrayContains` value | products, `labels arrayContains "sale'; DROP TABLE products; --"` | value parameterized; no injection |
-| C1431 | SQL injection in `icontains` value | users, `email icontains "'; DROP TABLE users; --"` | PG: `ILIKE $1` parameterized; no injection |
-| C1432 | SQL injection in `notBetween` value | orders, `total notBetween { from: "0; DROP TABLE orders", to: 100 }` | rejected or treated as literal |
-| C1433 | SQL injection in `endsWith` value | users, `email endsWith "'; DROP TABLE users; --"` | value escaped and parameterized; no injection |
-| C1434 | SQL injection in `arrayContainsAll` value | products, `labels arrayContainsAll ["sale'; DROP TABLE products; --"]` | PG: `@>` with array param; value parameterized; no injection |
-| C1435 | SQL injection in `arrayContainsAny` value | products, `labels arrayContainsAny ["sale'; DROP TABLE products; --"]` | PG: `&&` with array param; value parameterized; no injection |
-
-### 16.2 Identifier Injection
+Column names, table names, and EXISTS references are validated against metadata **before** reaching any dialect's SQL generator. These checks are identical across all dialects.
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
@@ -812,55 +796,75 @@ These tests verify that user-provided inputs — filter values, column/table nam
 | C1410 | SQL injection in `byIds` values | users, `byIds: ["'; DROP TABLE users; --"]` | values parameterized (treated as `in` filter on PK); no injection |
 | C1411 | SQL injection in EXISTS table name | orders with `exists: { table: "users; DROP TABLE users", on: { left: 'customerId', right: 'id' } }` | `UNKNOWN_TABLE` error |
 
-### 16.3 Aggregation Alias Injection
+### 16.2 Aggregation Alias Injection (all dialects)
 
 Aggregation aliases are user-provided strings interpolated into SQL as quoted identifiers (`"alias"` for Postgres/Trino, `` `alias` `` for ClickHouse). If the alias contains the quoting character, it could break out of identifier quoting and inject SQL. Conforming implementations must either **reject** aliases containing SQL metacharacters at validation time (`INVALID_AGGREGATION`) or **escape** the quoting character (e.g., `"` → `""` for Postgres/Trino, `` ` `` → ``` `` ``` for ClickHouse).
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C1412 | Aggregation alias with double-quote injection | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; DROP TABLE orders;--' }]` | `INVALID_AGGREGATION` validation error **or** alias safely escaped in generated SQL; no SQL injection |
-| C1413 | Aggregation alias with backtick injection | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x`; DROP TABLE orders;--' }]` | same: rejected or escaped; no injection |
-| C1414 | HAVING referencing injected alias | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; --' }]`, `having: [{ alias: 'x"; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in HAVING clause |
-| C1415 | ORDER BY referencing injected alias | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; --' }]`, `orderBy: [{ column: 'x"; --', direction: 'asc' }]` | rejected or escaped; no injection in ORDER BY clause |
+| C1412 | PG alias with double-quote injection | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; DROP TABLE orders;--' }]` | `INVALID_AGGREGATION` validation error **or** alias safely escaped in generated SQL; no SQL injection |
+| C1413 | PG alias with backtick injection | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x`; DROP TABLE orders;--' }]` | same: rejected or escaped; no injection |
+| C1414 | PG HAVING referencing injected alias | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; --' }]`, `having: [{ alias: 'x"; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in HAVING clause |
+| C1415 | PG ORDER BY referencing injected alias | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; --' }]`, `orderBy: [{ column: 'x"; --', direction: 'asc' }]` | rejected or escaped; no injection in ORDER BY clause |
+| C1419 | CH alias with backtick injection | events, `aggregations: [{ column: 'timestamp', function: 'count', alias: 'x`; DROP TABLE events;--' }]` | rejected or backtick escaped in `` `alias` `` quoting; no injection |
+| C1422 | Trino alias with double-quote injection | events JOIN users (cross-DB), `aggregations: [{ column: 'id', table: 'users', function: 'count', alias: 'x"; DROP TABLE users;--' }]` | rejected or double-quote escaped; no injection |
 
-### 16.4 Dialect-Specific Injection
+### 16.3 PostgreSQL Filter Value Injection
 
-Tests 16.1–16.3 target pg-main tables, so only the **PostgreSQL** dialect's parameterization (`$N`) and quoting (`"identifier"`) is exercised. This subsection ensures the **ClickHouse** (typed `{pN:Type}` params, `` `identifier` `` quoting) and **Trino** (`?` params, multi-catalog `"catalog"."schema"."table"` quoting) code paths are also injection-resistant. Tests focus on operators whose SQL generation is **materially different** per dialect.
-
-#### ClickHouse
+These tests target pg-main tables, exercising PostgreSQL's `$N` parameterization, native `ILIKE`, `= ANY($1::type[])`, `@>`, and `&&` operators.
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C1416 | CH `=` filter injection | events (ch-analytics), `type = "'; DROP TABLE events; --"` | value parameterized via `{pN:String}`; no injection |
-| C1417 | CH `arrayContainsAny` injection | events, `tags arrayContainsAny ["x'; DROP TABLE events; --"]` | array values parameterized; no injection |
+| C1400 | PG `=` filter injection | orders, `status = "'; DROP TABLE orders; --"` | value parameterized via `$1`; no table dropped |
+| C1401 | PG `like` filter injection | users, `email like "%'; DROP TABLE users; --%"` | value parameterized via `$1`; no injection |
+| C1402 | PG `contains` injection | users, `email contains "'; DROP TABLE --"` | escapeLike + parameterized via `$1`; no injection |
+| C1403 | PG `between` injection | orders, `total between { from: "0; DROP TABLE orders", to: 100 }` | both bounds parameterized via `$1`, `$2`; rejected or treated as literal |
+| C1406 | PG `in` filter injection | orders, `status in ["active'; DROP TABLE orders; --"]` | `= ANY($1::text[])` — single array param; no injection |
+| C1407 | PG `notIn` filter injection | orders, `status notIn ["active'; DROP TABLE orders; --"]` | `<> ALL($1::text[])` — single array param; no injection |
+| C1408 | PG `levenshteinLte` injection | users, `firstName levenshteinLte { text: "'; DROP TABLE users; --", maxDistance: 3 }` | `levenshtein(col, $1) <= $2`; both parameterized; no injection |
+| C1409 | PG `arrayContains` injection | products, `labels arrayContains "sale'; DROP TABLE products; --"` | `$1::text = ANY(col)` parameterized; no injection |
+| C1431 | PG `icontains` injection | users, `email icontains "'; DROP TABLE users; --"` | `ILIKE $1` (native keyword); no injection |
+| C1432 | PG `notBetween` injection | orders, `total notBetween { from: "0; DROP TABLE orders", to: 100 }` | `NOT BETWEEN $1 AND $2`; both parameterized; no injection |
+| C1433 | PG `endsWith` injection | users, `email endsWith "'; DROP TABLE users; --"` | `LIKE $1` with `%escaped` pattern; parameterized; no injection |
+| C1434 | PG `arrayContainsAll` injection | products, `labels arrayContainsAll ["sale'; DROP TABLE products; --"]` | `col @> $1::text[]` — PG array containment operator; no injection |
+| C1435 | PG `arrayContainsAny` injection | products, `labels arrayContainsAny ["sale'; DROP TABLE products; --"]` | `col && $1::text[]` — PG array overlap operator; no injection |
+
+### 16.4 ClickHouse Filter Value Injection
+
+These tests target ch-analytics tables (events), exercising ClickHouse's typed `{pN:Type}` parameterization, `ilike()` function, native `startsWith()`/`endsWith()`, `has()`/`hasAll()`/`hasAny()`, `IN tuple()`, `editDistance()`, and `NOT (col BETWEEN ...)` wrapping.
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1416 | CH `=` filter injection | events, `type = "'; DROP TABLE events; --"` | value parameterized via `{pN:String}`; no injection |
 | C1418 | CH column name injection | events, `columns: ['id`; DROP TABLE events; --']` | `UNKNOWN_COLUMN` error |
-| C1419 | CH aggregation alias injection | events, `aggregations: [{ column: 'timestamp', function: 'count', alias: 'x`; DROP TABLE events;--' }]` | rejected or backtick escaped; no injection |
-| C1423 | CH `in` filter injection | events, `type in ["purchase'; DROP TABLE events; --"]` | expanded `IN tuple({p1:String}, ...)` — each element individually parameterized; no injection |
+| C1423 | CH `in` filter injection | events, `type in ["purchase'; DROP TABLE events; --"]` | expanded `IN tuple({p1:String}, ...)` — each element individually typed; no injection |
 | C1424 | CH `contains` filter injection | events, `type contains "'; DROP TABLE events; --"` | escapeLike applied, parameterized via `{pN:String}`; no injection |
 | C1425 | CH `between` filter injection | events, `timestamp between { from: "2024-01-01'; DROP TABLE events; --", to: "2024-12-31" }` | both bounds parameterized via `{p1:DateTime}` and `{p2:DateTime}`; no injection |
 | C1426 | CH `levenshteinLte` injection | events, `type levenshteinLte { text: "'; DROP TABLE events; --", maxDistance: 5 }` | mapped to `editDistance()` function; text via `{pN:String}`, threshold via `{pN:UInt32}`; no injection |
-| C1427 | CH `startsWith` injection | events, `type startsWith "'; DROP TABLE events; --"` | ClickHouse uses native `startsWith()` function (not LIKE); value parameterized via `{pN:String}`; no injection |
-| C1436 | CH `endsWith` injection | events, `type endsWith "'; DROP TABLE events; --"` | CH uses native `endsWith()` function (not LIKE); value parameterized via `{pN:String}`; no injection |
-| C1437 | CH `icontains` injection | events, `type icontains "'; DROP TABLE events; --"` | CH uses `ilike(col, {pN:String})`; value escaped and parameterized; no injection |
-| C1438 | CH `notBetween` injection | events, `timestamp notBetween { from: "2024-01-01'; DROP TABLE events;--", to: "2024-12-31" }` | CH wraps as `NOT (col BETWEEN {p1:DateTime} AND {p2:DateTime})`; both bounds parameterized; no injection |
-| C1439 | CH `arrayContains` injection | events, `tags arrayContains "x'; DROP TABLE events; --"` | CH uses `has(col, {p1:String})`; value parameterized; no injection |
-| C1440 | CH `arrayContainsAll` injection | events, `tags arrayContainsAll ["x'; DROP TABLE events; --"]` | CH uses `hasAll(col, [{p1:String}, ...])`; each element parameterized; no injection |
-| C1441 | CH `notIn` injection | events, `type notIn ["purchase'; DROP TABLE events; --"]` | `NOT IN tuple({p1:String}, ...)` — each element individually parameterized; no injection |
+| C1427 | CH `startsWith` injection | events, `type startsWith "'; DROP TABLE events; --"` | native `startsWith(col, {pN:String})` function (not LIKE); no injection |
+| C1436 | CH `endsWith` injection | events, `type endsWith "'; DROP TABLE events; --"` | native `endsWith(col, {pN:String})` function (not LIKE); no injection |
+| C1437 | CH `icontains` injection | events, `type icontains "'; DROP TABLE events; --"` | `ilike(col, {pN:String})` function; value escaped and parameterized; no injection |
+| C1438 | CH `notBetween` injection | events, `timestamp notBetween { from: "2024-01-01'; DROP TABLE events;--", to: "2024-12-31" }` | `NOT (col BETWEEN {p1:DateTime} AND {p2:DateTime})`; both parameterized; no injection |
+| C1439 | CH `arrayContains` injection | events, `tags arrayContains "x'; DROP TABLE events; --"` | `has(col, {p1:String})`; value parameterized; no injection |
+| C1440 | CH `arrayContainsAll` injection | events, `tags arrayContainsAll ["x'; DROP TABLE events; --"]` | `hasAll(col, [{p1:String}, ...])`; each element parameterized; no injection |
+| C1417 | CH `arrayContainsAny` injection | events, `tags arrayContainsAny ["x'; DROP TABLE events; --"]` | `hasAny(col, [{p1:String}, ...])`; each element parameterized; no injection |
+| C1441 | CH `notIn` injection | events, `type notIn ["purchase'; DROP TABLE events; --"]` | `NOT IN tuple({p1:String}, ...)` — each element individually typed; no injection |
 
-#### Trino
+### 16.5 Trino Filter Value Injection
+
+These tests use cross-DB joins (events + users/products), forcing Trino as the executor. This exercises Trino's `?` parameterization, `lower(col) LIKE lower(?) ESCAPE '\\'` emulation, `contains()`, `arrays_overlap()`, `array_except()`, and `levenshtein_distance()`.
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C1420 | Trino cross-DB `=` filter injection | events JOIN users (ch-analytics + pg-main), filter `users.email = "'; DROP TABLE users; --"` | Trino `?` parameterization; no injection |
-| C1421 | Trino cross-DB column name injection | events JOIN users, `columns: ['id"; DROP TABLE users; --']` on users side | `UNKNOWN_COLUMN` error |
-| C1422 | Trino cross-DB aggregation alias injection | events JOIN users, `aggregations: [{ column: 'id', table: 'users', function: 'count', alias: 'x"; DROP TABLE users;--' }]` | rejected or double-quote escaped; no injection |
+| C1420 | Trino `=` filter injection | events JOIN users (ch-analytics + pg-main), filter `users.email = "'; DROP TABLE users; --"` | Trino `?` parameterization; no injection |
+| C1421 | Trino column name injection | events JOIN users, `columns: ['id"; DROP TABLE users; --']` on users side | `UNKNOWN_COLUMN` error |
 | C1428 | Trino `in` filter injection | events JOIN users, filter `users.email in ["x'; DROP TABLE users; --"]` | expanded `IN (?, ?, ...)` — each element individually parameterized; no injection |
 | C1429 | Trino `contains` filter injection | events JOIN users, filter `users.email contains "'; DROP TABLE users; --"` | escapeLike applied, `LIKE ? ESCAPE '\\'` — Trino-specific ESCAPE clause; no injection |
-| C1430 | Trino `levenshteinLte` injection | events JOIN users, filter `users.firstName levenshteinLte { text: "'; DROP TABLE users; --", maxDistance: 5 }` | mapped to `levenshtein_distance()` function; both params via `?`; no injection |
-| C1442 | Trino `icontains` injection | events JOIN users, filter `users.email icontains "'; DROP TABLE users; --"` | `lower(col) LIKE lower(?) ESCAPE '\\'` — Trino-specific `lower()` emulation + ESCAPE; no injection |
-| C1443 | Trino `arrayContains` injection | events JOIN users and products, filter `products.labels arrayContains "x'; DROP TABLE products; --"` | Trino uses `contains(col, ?)`; value parameterized; no injection |
-| C1444 | Trino `arrayContainsAll` injection | events JOIN users and products, filter `products.labels arrayContainsAll ["x'; DROP TABLE products; --"]` | Trino uses `cardinality(array_except(ARRAY[?, ...], col)) = 0`; each element parameterized; no injection |
-| C1445 | Trino `arrayContainsAny` injection | events JOIN users and products, filter `products.labels arrayContainsAny ["x'; DROP TABLE products; --"]` | Trino uses `arrays_overlap(col, ARRAY[?, ...])`; each element parameterized; no injection |
+| C1430 | Trino `levenshteinLte` injection | events JOIN users, filter `users.firstName levenshteinLte { text: "'; DROP TABLE users; --", maxDistance: 5 }` | `levenshtein_distance(col, ?) <= ?`; both params via `?`; no injection |
+| C1442 | Trino `icontains` injection | events JOIN users, filter `users.email icontains "'; DROP TABLE users; --"` | `lower(col) LIKE lower(?) ESCAPE '\\'`; Trino `lower()` emulation + ESCAPE; no injection |
+| C1443 | Trino `arrayContains` injection | events JOIN users and products, filter `products.labels arrayContains "x'; DROP TABLE products; --"` | `contains(col, ?)`; value parameterized; no injection |
+| C1444 | Trino `arrayContainsAll` injection | events JOIN users and products, filter `products.labels arrayContainsAll ["x'; DROP TABLE products; --"]` | `cardinality(array_except(ARRAY[?, ...], col)) = 0`; each element parameterized; no injection |
+| C1445 | Trino `arrayContainsAny` injection | events JOIN users and products, filter `products.labels arrayContainsAny ["x'; DROP TABLE products; --"]` | `arrays_overlap(col, ARRAY[?, ...])`; each element parameterized; no injection |
 
 ---
 
