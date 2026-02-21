@@ -590,7 +590,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 |---|---|---|---|
 | C320 | GROUP BY single column | samples, groupBy: [status], columns: [status] | 4 distinct statuses (active, paid, cancelled, shipped) |
 | C321 | GROUP BY with multi-column | samples, groupBy: [status, isActive], columns: [status, isActive], COUNT(*) | grouped by both |
-| C322 | HAVING single condition | samples GROUP BY status, SUM(amount) as totalAmt, `having: [{ column: 'totalAmt', operator: '>', value: 100 }]` | 3 groups: active (400), paid (200), shipped (150) |
+| C322 | HAVING single condition | samples GROUP BY status, SUM(amount) as totalAmt, `having: [{ alias: 'totalAmt', operator: '>', value: 100 }]` | 3 groups: active (400), paid (200), shipped (150) |
 | C323 | HAVING with OR group | samples GROUP BY status, HAVING `(SUM(amount) > 250 OR AVG(amount) > 150)` | 2 groups: active (SUM 400 > 250) and paid (AVG 200 > 150) |
 | C324 | HAVING with BETWEEN | samples GROUP BY status, SUM(amount) as totalAmt, HAVING `totalAmt between { from: 100, to: 300 }` | 2 groups: paid (200) and shipped (150) |
 | C325 | HAVING with NOT BETWEEN | samples GROUP BY status, SUM(amount) as totalAmt, HAVING `totalAmt notBetween { from: 100, to: 300 }` | 2 groups: active (400) and cancelled (50) |
@@ -638,7 +638,7 @@ Tests are organized into categories. Each test has a unique ID for traceability.
 | C600 | EXISTS filter | samples WHERE EXISTS sampleItems | only samples that have items (ids 1, 2, 3, 5) |
 | C601 | NOT EXISTS filter | samples WHERE NOT EXISTS sampleItems (`exists: false`) | only samples without items (id 4) |
 | C602 | EXISTS with subquery filter | samples WHERE EXISTS sampleItems(status = 'paid') | only samples with paid items (ids 2, 5) |
-| C603 | EXISTS inside OR group | samples WHERE `(status = 'cancelled' OR EXISTS sampleItems)` | 4 rows (ids 1, 2, 3, 5 — id 3 via status, rest via EXISTS; id 4 excluded) |
+| C603 | EXISTS inside OR group | samples WHERE `(status = 'cancelled' OR EXISTS sampleItems)` | 4 rows (ids 1, 2, 3, 5 — all four have items; id 3 also matches via status; id 4 excluded: not cancelled and no items) |
 | C604 | Nested EXISTS | samples WHERE EXISTS sampleItems WHERE EXISTS sampleDetails (2-hop chain) | 3 rows (ids 1, 2, 5 — samples whose items have details) |
 | C605 | Counted EXISTS (>=) | samples WHERE EXISTS sampleItems `count: { operator: '>=', value: 2 }` | 2 rows (ids 1, 5 — each has 2 items) |
 | C606 | Counted EXISTS (=) | samples WHERE EXISTS sampleItems `count: { operator: '=', value: 1 }` | 2 rows (ids 2, 3 — each has exactly 1 item) |
