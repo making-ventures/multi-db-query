@@ -184,6 +184,14 @@ Trino: `{ enabled: true }`
 |---|---|---|---|
 | orders | ch-analytics | default.orders_replica | seconds |
 
+### Caches
+
+| id | engine | tables |
+|---|---|---|
+| `redis-main` | redis | `users` (keyPattern: `users:{id}`, all columns) |
+
+The `redis-main` cache provider enables `byIds` queries on `users` to be served from cache (strategy `'cache'`). Health check tests (C1300) verify the `cacheProviders` key includes `redis-main`.
+
 ### Roles
 
 | Role ID | Tables |
