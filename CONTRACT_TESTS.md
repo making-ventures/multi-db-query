@@ -783,7 +783,7 @@ These tests verify that errors transmitted over HTTP are properly reconstructed 
 
 ## 16. SQL Injection Resistance
 
-These tests verify that user-provided inputs — filter values, column/table names, aggregation aliases, and subquery references — cannot inject SQL. Each test sends a malicious value and asserts the query either succeeds safely (value treated as data, not code) or is properly rejected with a validation error.
+These tests verify that user-provided inputs — filter values, column/table names, aggregation aliases, and subquery references — cannot inject SQL across **all three dialects** (PostgreSQL, ClickHouse, Trino). Each test sends a malicious value and asserts the query either succeeds safely (value treated as data, not code) or is properly rejected with a validation error.
 
 ### 16.1 Filter Value Injection
 
@@ -817,6 +817,20 @@ Aggregation aliases are user-provided strings interpolated into SQL as quoted id
 | C1413 | Aggregation alias with backtick injection | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x`; DROP TABLE orders;--' }]` | same: rejected or escaped; no injection |
 | C1414 | HAVING referencing injected alias | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; --' }]`, `having: [{ alias: 'x"; --', operator: '>', value: 0 }]` | rejected or escaped; no injection in HAVING clause |
 | C1415 | ORDER BY referencing injected alias | orders, `aggregations: [{ column: 'total', function: 'sum', alias: 'x"; --' }]`, `orderBy: [{ column: 'x"; --', direction: 'asc' }]` | rejected or escaped; no injection in ORDER BY clause |
+
+### 16.4 Dialect-Specific Injection
+
+Tests 16.1–16.3 target pg-main tables, so only the **PostgreSQL** dialect's parameterization (`$N`) and quoting (`"identifier"`) is exercised. This subsection ensures the **ClickHouse** (typed `{pN:Type}` params, `` `identifier` `` quoting) and **Trino** (`?` params, multi-catalog `"catalog"."schema"."table"` quoting) code paths are also injection-resistant.
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1416 | ClickHouse `=` filter injection | events (ch-analytics), `type = "'; DROP TABLE events; --"` | value parameterized via `{pN:String}`; no injection |
+| C1417 | ClickHouse `in` filter injection | events, `tags arrayContainsAny ["x'; DROP TABLE events; --"]` | array values parameterized; no injection |
+| C1418 | ClickHouse column name injection | events, `columns: ['id`; DROP TABLE events; --']` | `UNKNOWN_COLUMN` error |
+| C1419 | ClickHouse aggregation alias injection | events, `aggregations: [{ column: 'timestamp', function: 'count', alias: 'x`; DROP TABLE events;--' }]` | rejected or backtick escaped; no injection |
+| C1420 | Trino cross-DB `=` filter injection | events JOIN users (ch-analytics + pg-main), filter `users.email = "'; DROP TABLE users; --"` | Trino `?` parameterization; no injection |
+| C1421 | Trino cross-DB column name injection | events JOIN users, `columns: ['id"; DROP TABLE users; --']` on users side | `UNKNOWN_COLUMN` error |
+| C1422 | Trino cross-DB aggregation alias injection | events JOIN users, `aggregations: [{ column: 'id', table: 'users', function: 'count', alias: 'x"; DROP TABLE users;--' }]` | rejected or double-quote escaped; no injection |
 
 ---
 
@@ -900,7 +914,7 @@ For implementation developers, verify the following groups pass in order:
 17. **SQL Injection** (C1400-C1406) — security
 18. **Edge Cases** (C1700-C1714) — nulls, types, strategies, distinct+count, empty groups
 
-Total: **298 contract tests**
+Total: **305 contract tests**
 
 ---
 
