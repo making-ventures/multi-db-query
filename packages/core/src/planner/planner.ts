@@ -1,13 +1,6 @@
 import type { QueryDefinition } from '@mkven/multi-db-validation'
 import type { RegistrySnapshot } from '../metadata/registry.js'
-import {
-  collectTables,
-  throwPlannerError,
-  tryCache,
-  tryDirect,
-  tryMaterialized,
-  tryTrino,
-} from './strategies.js'
+import { collectTables, throwPlannerError, tryCache, tryDirect, tryMaterialized, tryTrino } from './strategies.js'
 
 // --- Types ---
 

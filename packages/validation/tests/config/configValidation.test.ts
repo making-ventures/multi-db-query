@@ -102,7 +102,7 @@ describe('validateConfig', () => {
     const config = validConfig()
     const badTable: TableMeta = {
       ...ordersTable,
-      relations: [{ column: 'userId', references: { table: 'invoiceLines', column: 'id' }, type: 'many-to-one' }],
+      relations: [{ column: 'customerId', references: { table: 'invoiceLines', column: 'id' }, type: 'many-to-one' }],
     }
     config.tables = [usersTable, badTable, eventsTable]
     const err = validateConfig(config)
@@ -114,7 +114,7 @@ describe('validateConfig', () => {
     const config = validConfig()
     const badTable: TableMeta = {
       ...ordersTable,
-      relations: [{ column: 'userId', references: { table: 'users', column: 'nonExistent' }, type: 'many-to-one' }],
+      relations: [{ column: 'customerId', references: { table: 'users', column: 'nonExistent' }, type: 'many-to-one' }],
     }
     config.tables = [usersTable, badTable, eventsTable]
     const err = validateConfig(config)
@@ -221,7 +221,7 @@ describe('validateConfig', () => {
         ...usersTable,
         columns: [
           ...usersTable.columns,
-          { apiName: 'name', physicalName: 'display_name', type: 'string', nullable: false },
+          { apiName: 'firstName', physicalName: 'display_name', type: 'string', nullable: false },
         ],
       },
       ordersTable,
@@ -229,6 +229,6 @@ describe('validateConfig', () => {
     ]
     const err = validateConfig(config)
     expect(err).not.toBeNull()
-    expect(err?.errors.some((e) => e.code === 'DUPLICATE_API_NAME' && e.details.actual === 'name')).toBe(true)
+    expect(err?.errors.some((e) => e.code === 'DUPLICATE_API_NAME' && e.details.actual === 'firstName')).toBe(true)
   })
 })

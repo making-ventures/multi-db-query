@@ -11,14 +11,13 @@ import type {
   QueryFilter,
   QueryFilterGroup,
 } from '../types/query.js'
+import type { EffectiveAccess } from './rules.js'
 import {
   BETWEEN_OPS,
-  HAVING_ALLOWED_OPS,
-  IN_OPS,
-  NULL_OPS,
-  ORDERABLE_TYPES,
   getEffectiveAccess,
   getElementType,
+  HAVING_ALLOWED_OPS,
+  IN_OPS,
   isArrayType,
   isColumnAllowed,
   isColumnFilter,
@@ -26,12 +25,13 @@ import {
   isFilterGroup,
   isOperatorValidForType,
   matchesColumnType,
+  NULL_OPS,
+  ORDERABLE_TYPES,
   resolveAggTable,
   resolveTableForFilter,
   resolveTableForGroupBy,
   resolveTableForOrderBy,
 } from './rules.js'
-import type { EffectiveAccess } from './rules.js'
 
 // --- Main Validation ---
 
@@ -137,15 +137,21 @@ export function validateQuery(
       }
 
       if (join.filters !== undefined) {
+        // For join filters, default table context is the joined table (concept: L497-509)
+        // Build augmented maps so explicit `table` references to fromTable still work
+        const joinFilterTables = new Map(joinedTables)
+        joinFilterTables.set(fromTable.apiName, fromTable)
+        const joinFilterAccessMap = new Map(joinedAccessMap)
+        joinFilterAccessMap.set(fromTable.apiName, fromAccess)
         validateFilters(
           join.filters,
-          fromTable,
-          joinedTables,
+          joinTable,
+          joinFilterTables,
           index,
           context,
           roles,
-          fromAccess,
-          joinedAccessMap,
+          jAccess,
+          joinFilterAccessMap,
           errors,
         )
       }
@@ -775,7 +781,7 @@ function validateExistsFilter(
   filter: QueryExistsFilter,
   filterIndex: number,
   fromTable: TableMeta,
-  _joinedTables: Map<string, TableMeta>,
+  joinedTables: Map<string, TableMeta>,
   index: MetadataIndex,
   context: ExecutionContext,
   roles: readonly RoleMeta[],
@@ -794,11 +800,24 @@ function validateExistsFilter(
     return
   }
 
-  const hasRelation =
+  let hasRelation =
     parentTable.relations.some((r) => r.references.table === existsTable.id || r.references.table === filter.table) ||
     existsTable.relations.some(
       (r) => r.references.table === parentTable.id || r.references.table === parentTable.apiName,
     )
+
+  // For top-level EXISTS, also check joined tables for relations (concept rule 12)
+  if (!hasRelation && existsParentTable === undefined) {
+    for (const jt of joinedTables.values()) {
+      if (
+        jt.relations.some((r) => r.references.table === existsTable.id || r.references.table === filter.table) ||
+        existsTable.relations.some((r) => r.references.table === jt.id || r.references.table === jt.apiName)
+      ) {
+        hasRelation = true
+        break
+      }
+    }
+  }
 
   if (!hasRelation) {
     errors.push({
@@ -918,4 +937,3 @@ function validateHavingFilter(
     })
   }
 }
-

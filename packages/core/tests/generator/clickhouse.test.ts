@@ -39,7 +39,7 @@ function base(overrides: Partial<SqlParts> = {}): SqlParts {
 describe('ClickHouse — SELECT & FROM', () => {
   it('backtick quoting', () => {
     const { sql } = dialect.generate(base(), [])
-    expect(sql).toBe('SELECT `t0`.`id`, `t0`.`name` FROM `default`.`users` AS `t0`')
+    expect(sql).toBe('SELECT `t0`.`id` AS `t0__id`, `t0`.`name` AS `t0__name` FROM `default`.`users` AS `t0`')
   })
 
   it('count mode', () => {
@@ -556,7 +556,7 @@ describe('ClickHouse — aggregations additional', () => {
       ],
     })
     const { sql } = dialect.generate(parts, [])
-    expect(sql).toContain('avg(`t0`.`total`) AS `avg_amount`')
+    expect(sql).toContain('AVG(`t0`.`total`) AS `avg_amount`')
     expect(sql).toContain('MIN(`t0`.`total`) AS `min_amount`')
     expect(sql).toContain('MAX(`t0`.`total`) AS `max_amount`')
   })
@@ -573,6 +573,19 @@ describe('ClickHouse — HAVING additional', () => {
     })
     const { sql, params } = dialect.generate(parts, [100, 1000])
     expect(sql).toContain('HAVING `total` BETWEEN {p1:Int32} AND {p2:Int32}')
+    expect(params).toEqual([100, 1000])
+  })
+
+  it('having not between', () => {
+    const parts = base({
+      select: [col('t0', 'status')],
+      from: tbl('default.orders', 't0'),
+      groupBy: [col('t0', 'status')],
+      aggregations: [{ fn: 'sum', column: col('t0', 'total'), alias: 'total' }],
+      having: { alias: 'total', not: true, fromParamIndex: 0, toParamIndex: 1 },
+    })
+    const { sql, params } = dialect.generate(parts, [100, 1000])
+    expect(sql).toContain('HAVING NOT (`total` BETWEEN {p1:Int32} AND {p2:Int32})')
     expect(params).toEqual([100, 1000])
   })
 })
@@ -627,7 +640,7 @@ describe('ClickHouse — full query', () => {
     const { sql, params } = dialect.generate(parts, [18, 2])
 
     expect(sql).toBe(
-      'SELECT DISTINCT `t0`.`status`, COUNT(*) AS `cnt`' +
+      'SELECT DISTINCT `t0`.`status` AS `t0__status`, COUNT(*) AS `cnt`' +
         ' FROM `default`.`orders` AS `t0`' +
         ' INNER JOIN `default`.`users` AS `t1` ON `t0`.`user_id` = `t1`.`id`' +
         ' WHERE `t1`.`age` >= {p1:Int32}' +

@@ -1,3 +1,13 @@
+import {
+  escapeLike,
+  isArrayCond,
+  isBetween,
+  isColCond,
+  isCounted,
+  isExists,
+  isFn,
+  isGroup,
+} from '../generator/fragments.js'
 import type {
   AggregationClause,
   ColumnRef,
@@ -19,7 +29,6 @@ import type {
   WhereGroup,
   WhereNode,
 } from '../types/ir.js'
-import { escapeLike, isArrayCond, isBetween, isColCond, isCounted, isExists, isFn, isGroup } from '../generator/fragments.js'
 import type { SqlDialect } from './dialect.js'
 
 // --- Postgres Dialect ---
@@ -88,7 +97,7 @@ class PgGenerator {
 
     const items: string[] = []
     for (const col of parts.select) {
-      items.push(quoteCol(col))
+      items.push(`${quoteCol(col)} AS "${col.tableAlias}__${col.columnName}"`)
     }
     for (const a of parts.aggregations) {
       items.push(this.aggClause(a))
@@ -326,7 +335,7 @@ function pgCast(elementType: string | undefined): string {
     decimal: 'numeric[]',
     boolean: 'bool[]',
     date: 'date[]',
-    datetime: 'timestamp[]',
+    timestamp: 'timestamp[]',
   }
   return map[elementType] ?? 'text[]'
 }
@@ -339,7 +348,7 @@ function pgScalarCast(elementType: string): string {
     decimal: 'numeric',
     boolean: 'bool',
     date: 'date',
-    datetime: 'timestamp',
+    timestamp: 'timestamp',
   }
   return map[elementType] ?? 'text'
 }

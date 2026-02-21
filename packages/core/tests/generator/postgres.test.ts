@@ -43,13 +43,13 @@ function base(overrides: Partial<SqlParts> = {}): SqlParts {
 describe('PostgresDialect — SELECT', () => {
   it('simple select', () => {
     const { sql, params } = dialect.generate(base(), [])
-    expect(sql).toBe('SELECT "t0"."id", "t0"."name" FROM "public"."users" AS "t0"')
+    expect(sql).toBe('SELECT "t0"."id" AS "t0__id", "t0"."name" AS "t0__name" FROM "public"."users" AS "t0"')
     expect(params).toEqual([])
   })
 
   it('select distinct', () => {
     const { sql } = dialect.generate(base({ distinct: true }), [])
-    expect(sql).toBe('SELECT DISTINCT "t0"."id", "t0"."name" FROM "public"."users" AS "t0"')
+    expect(sql).toBe('SELECT DISTINCT "t0"."id" AS "t0__id", "t0"."name" AS "t0__name" FROM "public"."users" AS "t0"')
   })
 
   it('count mode', () => {
@@ -488,7 +488,7 @@ describe('PostgresDialect — GROUP BY + aggregations', () => {
       aggregations: [{ fn: 'count', column: '*', alias: 'cnt' }],
     })
     const { sql } = dialect.generate(parts, [])
-    expect(sql).toContain('SELECT "t0"."status", COUNT(*) AS "cnt"')
+    expect(sql).toContain('SELECT "t0"."status" AS "t0__status", COUNT(*) AS "cnt"')
     expect(sql).toContain('GROUP BY "t0"."status"')
   })
 
@@ -544,6 +544,19 @@ describe('PostgresDialect — HAVING', () => {
     })
     const { sql, params } = dialect.generate(parts, [100, 1000])
     expect(sql).toContain('HAVING "total" BETWEEN $1 AND $2')
+    expect(params).toEqual([100, 1000])
+  })
+
+  it('having not between', () => {
+    const parts = base({
+      select: [col('t0', 'status')],
+      from: tbl('public.orders', 't0'),
+      groupBy: [col('t0', 'status')],
+      aggregations: [{ fn: 'sum', column: col('t0', 'total'), alias: 'total' }],
+      having: { alias: 'total', not: true, fromParamIndex: 0, toParamIndex: 1 },
+    })
+    const { sql, params } = dialect.generate(parts, [100, 1000])
+    expect(sql).toContain('HAVING "total" NOT BETWEEN $1 AND $2')
     expect(params).toEqual([100, 1000])
   })
 })
@@ -627,7 +640,7 @@ describe('PostgresDialect — full query', () => {
     const { sql, params } = dialect.generate(parts, [18, 2])
 
     expect(sql).toBe(
-      'SELECT DISTINCT "t0"."status", COUNT(*) AS "cnt"' +
+      'SELECT DISTINCT "t0"."status" AS "t0__status", COUNT(*) AS "cnt"' +
         ' FROM "public"."orders" AS "t0"' +
         ' INNER JOIN "public"."users" AS "t1" ON "t0"."user_id" = "t1"."id"' +
         ' WHERE "t1"."age" >= $1' +
@@ -674,8 +687,8 @@ describe('PostgresDialect — type casts', () => {
     expect(sql).toContain('$1::date[]')
   })
 
-  it('datetime → timestamp[]', () => {
-    const cond: WhereCondition = { column: col('t0', 'ts'), operator: 'in', paramIndex: 0, columnType: 'datetime' }
+  it('timestamp → timestamp[]', () => {
+    const cond: WhereCondition = { column: col('t0', 'ts'), operator: 'in', paramIndex: 0, columnType: 'timestamp' }
     const { sql } = dialect.generate(base({ where: cond }), [['2024-01-01T00:00:00Z']])
     expect(sql).toContain('$1::timestamp[]')
   })

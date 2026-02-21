@@ -32,10 +32,13 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
     it('#219: simple select returns data', async () => {
       const result = await engine.query({
-        definition: { from: 'orders' },
+        definition: { from: 'orders', columns: ['id', 'status'] },
         context: { roles: { user: ['admin'] } },
       })
       expect(result.kind).toBe('data')
+      if (result.kind === 'data') {
+        expect(result.meta.columns).toHaveLength(2)
+      }
     })
 
     it('#222: validation error on unknown table', async () => {
@@ -74,7 +77,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
       const result = await engine.query({
         definition: {
           from: 'orders',
-          joins: [{ table: 'users' }],
+          joins: [{ table: 'products' }],
           filters: [{ column: 'status', operator: '=', value: 'active' }],
         },
         context: { roles: { user: ['admin'] } },
@@ -102,7 +105,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
       await expect(
         engine.query({
           definition: { from: 'orders', columns: ['id', 'internalNote'] },
-          context: { roles: { user: ['restricted'] } },
+          context: { roles: { user: ['tenant-user'] } },
         }),
       ).rejects.toThrow(ValidationError)
     })

@@ -42,10 +42,11 @@ export const usersTable: TableMeta = {
   physicalName: 'public.users',
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
-    { apiName: 'name', physicalName: 'name', type: 'string', nullable: false },
-    { apiName: 'lastName', physicalName: 'last_name', type: 'string', nullable: true },
     { apiName: 'email', physicalName: 'email', type: 'string', nullable: false, maskingFn: 'email' },
     { apiName: 'phone', physicalName: 'phone', type: 'string', nullable: true, maskingFn: 'phone' },
+    { apiName: 'firstName', physicalName: 'first_name', type: 'string', nullable: false, maskingFn: 'name' },
+    { apiName: 'lastName', physicalName: 'last_name', type: 'string', nullable: false, maskingFn: 'name' },
+    { apiName: 'role', physicalName: 'role', type: 'string', nullable: false },
     { apiName: 'age', physicalName: 'age', type: 'int', nullable: true },
     { apiName: 'tenantId', physicalName: 'tenant_id', type: 'uuid', nullable: false },
     { apiName: 'createdAt', physicalName: 'created_at', type: 'timestamp', nullable: false },
@@ -61,21 +62,22 @@ export const ordersTable: TableMeta = {
   physicalName: 'public.orders',
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
-    { apiName: 'userId', physicalName: 'user_id', type: 'uuid', nullable: false },
     { apiName: 'tenantId', physicalName: 'tenant_id', type: 'uuid', nullable: false },
+    { apiName: 'customerId', physicalName: 'customer_id', type: 'uuid', nullable: false },
     { apiName: 'productId', physicalName: 'product_id', type: 'uuid', nullable: true },
-    { apiName: 'total', physicalName: 'total', type: 'decimal', nullable: false, maskingFn: 'number' },
+    { apiName: 'regionId', physicalName: 'region_id', type: 'string', nullable: false },
+    { apiName: 'total', physicalName: 'total_amount', type: 'decimal', nullable: false, maskingFn: 'number' },
     { apiName: 'discount', physicalName: 'discount', type: 'decimal', nullable: true },
-    { apiName: 'status', physicalName: 'status', type: 'string', nullable: false },
+    { apiName: 'status', physicalName: 'order_status', type: 'string', nullable: false },
     { apiName: 'internalNote', physicalName: 'internal_note', type: 'string', nullable: true, maskingFn: 'full' },
-    { apiName: 'createdAt', physicalName: 'created_at', type: 'timestamp', nullable: false },
+    { apiName: 'createdAt', physicalName: 'created_at', type: 'timestamp', nullable: false, maskingFn: 'date' },
     { apiName: 'quantity', physicalName: 'quantity', type: 'int', nullable: false },
     { apiName: 'isPaid', physicalName: 'is_paid', type: 'boolean', nullable: true },
     { apiName: 'priorities', physicalName: 'priorities', type: 'int[]', nullable: true },
   ],
   primaryKey: ['id'],
   relations: [
-    { column: 'userId', references: { table: 'users', column: 'id' }, type: 'many-to-one' },
+    { column: 'customerId', references: { table: 'users', column: 'id' }, type: 'many-to-one' },
     { column: 'productId', references: { table: 'products', column: 'id' }, type: 'many-to-one' },
     { column: 'tenantId', references: { table: 'tenants', column: 'id' }, type: 'many-to-one' },
   ],
@@ -142,12 +144,12 @@ export const eventsTable: TableMeta = {
   physicalName: 'default.events',
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
+    { apiName: 'type', physicalName: 'event_type', type: 'string', nullable: false },
     { apiName: 'userId', physicalName: 'user_id', type: 'uuid', nullable: false },
     { apiName: 'orderId', physicalName: 'order_id', type: 'uuid', nullable: true },
-    { apiName: 'eventType', physicalName: 'event_type', type: 'string', nullable: false },
     { apiName: 'payload', physicalName: 'payload', type: 'string', nullable: true, maskingFn: 'full' },
-    { apiName: 'tags', physicalName: 'tags', type: 'string[]', nullable: false },
-    { apiName: 'createdAt', physicalName: 'created_at', type: 'timestamp', nullable: false },
+    { apiName: 'tags', physicalName: 'tags', type: 'string[]', nullable: true },
+    { apiName: 'timestamp', physicalName: 'event_ts', type: 'timestamp', nullable: false },
   ],
   primaryKey: ['id'],
   relations: [
@@ -173,7 +175,7 @@ export const metricsTable: TableMeta = {
 }
 
 export const ordersArchiveTable: TableMeta = {
-  id: 'ordersArchive',
+  id: 'orders-archive',
   apiName: 'ordersArchive',
   database: 'iceberg-archive',
   physicalName: 'warehouse.orders_archive',
@@ -222,16 +224,13 @@ export const tenantsSyncToPgMain: ExternalSync = {
 
 // --- Caches (2) ---
 
-export const userCache: CacheMeta = {
-  id: 'redis-users',
+export const redisMainCache: CacheMeta = {
+  id: 'redis-main',
   engine: 'redis',
-  tables: [{ tableId: 'users', keyPattern: 'users:{id}' }],
-}
-
-export const productsCache: CacheMeta = {
-  id: 'redis-products',
-  engine: 'redis',
-  tables: [{ tableId: 'products', keyPattern: 'products:{id}', columns: ['id', 'name', 'category'] }],
+  tables: [
+    { tableId: 'users', keyPattern: 'users:{id}' },
+    { tableId: 'products', keyPattern: 'products:{id}', columns: ['id', 'name', 'category'] },
+  ],
 }
 
 // --- Roles (7) ---
@@ -248,7 +247,7 @@ export const tenantUserRole: RoleMeta = {
     },
     {
       tableId: 'users',
-      allowedColumns: ['id', 'name', 'email'],
+      allowedColumns: ['id', 'firstName', 'lastName', 'email'],
       maskedColumns: ['email'],
     },
     { tableId: 'products', allowedColumns: ['id', 'name', 'category', 'price'] },
@@ -269,7 +268,7 @@ export const analyticsReaderRole: RoleMeta = {
   tables: [
     { tableId: 'events', allowedColumns: '*', maskedColumns: ['payload'] },
     { tableId: 'metrics', allowedColumns: '*' },
-    { tableId: 'ordersArchive', allowedColumns: '*' },
+    { tableId: 'orders-archive', allowedColumns: '*' },
   ],
 }
 
@@ -280,7 +279,7 @@ export const ordersServiceRole: RoleMeta = {
   tables: [
     { tableId: 'orders', allowedColumns: '*' },
     { tableId: 'products', allowedColumns: '*' },
-    { tableId: 'users', allowedColumns: ['id', 'name'] },
+    { tableId: 'users', allowedColumns: ['id', 'firstName', 'lastName'] },
   ],
 }
 
@@ -311,7 +310,7 @@ export function validConfig(): MetadataConfig {
       metricsTable,
       ordersArchiveTable,
     ],
-    caches: [userCache, productsCache],
+    caches: [redisMainCache],
     externalSyncs: [ordersSyncToCh, ordersSyncToIceberg, tenantsSyncToPgMain],
     trino: { enabled: true },
   }

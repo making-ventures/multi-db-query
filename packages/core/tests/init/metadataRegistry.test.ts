@@ -6,39 +6,39 @@ import type { MetadataProvider, RoleProvider } from '../../src/types/providers.j
 
 // --- Fixtures ---
 
-const pgMain = { id: 'pg_main', engine: 'postgres' as const, host: 'localhost', port: 5432 }
-const chAnalytics = { id: 'ch_analytics', engine: 'clickhouse' as const, host: 'localhost', port: 8123 }
+const pgMain = { id: 'pg-main', engine: 'postgres' as const, host: 'localhost', port: 5432 }
+const chAnalytics = { id: 'ch-analytics', engine: 'clickhouse' as const, host: 'localhost', port: 8123 }
 
 const usersTable: TableMeta = {
   id: 'users',
-  database: 'pg_main',
+  database: 'pg-main',
   physicalName: 'public.users',
   apiName: 'users',
   primaryKey: ['id'],
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
-    { apiName: 'name', physicalName: 'name', type: 'string', nullable: false },
+    { apiName: 'firstName', physicalName: 'first_name', type: 'string', nullable: false },
   ],
   relations: [],
 }
 
 const ordersTable: TableMeta = {
   id: 'orders',
-  database: 'pg_main',
+  database: 'pg-main',
   physicalName: 'public.orders',
   apiName: 'orders',
   primaryKey: ['id'],
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
-    { apiName: 'userId', physicalName: 'user_id', type: 'uuid', nullable: false },
-    { apiName: 'total', physicalName: 'total', type: 'decimal', nullable: false },
+    { apiName: 'customerId', physicalName: 'customer_id', type: 'uuid', nullable: false },
+    { apiName: 'total', physicalName: 'total_amount', type: 'decimal', nullable: false },
   ],
-  relations: [{ column: 'userId', references: { table: 'users', column: 'id' }, type: 'many-to-one' }],
+  relations: [{ column: 'customerId', references: { table: 'users', column: 'id' }, type: 'many-to-one' }],
 }
 
 const userSync = {
   sourceTable: 'users',
-  targetDatabase: 'ch_analytics',
+  targetDatabase: 'ch-analytics',
   targetPhysicalName: 'users_replicated',
   method: 'debezium' as const,
   estimatedLag: 'seconds' as const,
@@ -90,7 +90,7 @@ describe('MetadataRegistry.create', () => {
     const usersSyncs = snapshot.syncsByTable.get('users')
     expect(usersSyncs).toBeDefined()
     expect(usersSyncs).toHaveLength(1)
-    expect(usersSyncs?.[0]?.targetDatabase).toBe('ch_analytics')
+    expect(usersSyncs?.[0]?.targetDatabase).toBe('ch-analytics')
   })
 
   it('builds connectivity graph', async () => {
@@ -98,8 +98,8 @@ describe('MetadataRegistry.create', () => {
     const snapshot = registry.getSnapshot()
 
     expect(snapshot.connectivityGraph).toHaveLength(1)
-    expect(snapshot.connectivityGraph[0]?.sourceDatabase).toBe('pg_main')
-    expect(snapshot.connectivityGraph[0]?.targetDatabase).toBe('ch_analytics')
+    expect(snapshot.connectivityGraph[0]?.sourceDatabase).toBe('pg-main')
+    expect(snapshot.connectivityGraph[0]?.targetDatabase).toBe('ch-analytics')
     expect(snapshot.connectivityGraph[0]?.method).toBe('debezium')
   })
 

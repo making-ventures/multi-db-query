@@ -1,3 +1,13 @@
+import {
+  escapeLike,
+  isArrayCond,
+  isBetween,
+  isColCond,
+  isCounted,
+  isExists,
+  isFn,
+  isGroup,
+} from '../generator/fragments.js'
 import type {
   AggregationClause,
   ColumnRef,
@@ -19,7 +29,6 @@ import type {
   WhereGroup,
   WhereNode,
 } from '../types/ir.js'
-import { escapeLike, isArrayCond, isBetween, isColCond, isCounted, isExists, isFn, isGroup } from '../generator/fragments.js'
 import type { SqlDialect } from './dialect.js'
 
 // --- ClickHouse Dialect ---
@@ -89,7 +98,7 @@ class ChGenerator {
 
     const items: string[] = []
     for (const col of parts.select) {
-      items.push(quoteCol(col))
+      items.push(`${quoteCol(col)} AS \`${col.tableAlias}__${col.columnName}\``)
     }
     for (const a of parts.aggregations) {
       items.push(this.aggClause(a))
@@ -106,9 +115,9 @@ class ChGenerator {
   // --- Aggregation ---
 
   private aggClause(a: AggregationClause): string {
-    const fn = a.fn === 'avg' ? 'avg' : a.fn.toUpperCase()
+    const fn = a.fn.toUpperCase()
     const col = a.column === '*' ? '*' : quoteCol(a.column)
-    return `${fn === 'avg' ? 'avg' : fn}(${col}) AS \`${a.alias}\``
+    return `${fn}(${col}) AS \`${a.alias}\``
   }
 
   // --- JOIN ---
@@ -209,7 +218,8 @@ class ChGenerator {
     if (idx === undefined) return `${col} IS NOT NULL`
 
     if (op === 'contains') return `has(${col}, ${this.refTyped(idx, chColumnTypeMap(c.elementType))})`
-    if (op === 'containsAll') return `hasAll(${col}, [${this.expandArrayElements(c.paramIndexes ?? [], c.elementType)}])`
+    if (op === 'containsAll')
+      return `hasAll(${col}, [${this.expandArrayElements(c.paramIndexes ?? [], c.elementType)}])`
     // containsAny
     return `hasAny(${col}, [${this.expandArrayElements(c.paramIndexes ?? [], c.elementType)}])`
   }
@@ -282,8 +292,10 @@ class ChGenerator {
     }
     if ('alias' in node) {
       const b = node as HavingBetween
-      const not = b.not === true ? 'NOT ' : ''
-      return `\`${b.alias}\` ${not}BETWEEN ${this.ref(b.fromParamIndex)} AND ${this.ref(b.toParamIndex)}`
+      if (b.not === true) {
+        return `NOT (\`${b.alias}\` BETWEEN ${this.ref(b.fromParamIndex)} AND ${this.ref(b.toParamIndex)})`
+      }
+      return `\`${b.alias}\` BETWEEN ${this.ref(b.fromParamIndex)} AND ${this.ref(b.toParamIndex)}`
     }
     return this.whereCond(node as WhereCondition)
   }

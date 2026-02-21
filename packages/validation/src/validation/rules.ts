@@ -1,7 +1,13 @@
 import type { ValidationErrorEntry } from '../errors.js'
 import type { ExecutionContext } from '../types/context.js'
 import type { RoleMeta, TableMeta } from '../types/metadata.js'
-import type { FilterOperator, QueryColumnFilter, QueryExistsFilter, QueryFilter, QueryFilterGroup } from '../types/query.js'
+import type {
+  FilterOperator,
+  QueryColumnFilter,
+  QueryExistsFilter,
+  QueryFilter,
+  QueryFilterGroup,
+} from '../types/query.js'
 
 // ── Operator / Type Constants ──────────────────────────────────
 
@@ -187,10 +193,10 @@ export function getEffectiveAccess(
 ): EffectiveAccess {
   const scopes: EffectiveAccess[] = []
 
-  if (context.roles.user !== undefined && context.roles.user.length > 0) {
+  if (context.roles.user !== undefined) {
     scopes.push(computeEffectiveAccess(tableId, roles, context.roles.user))
   }
-  if (context.roles.service !== undefined && context.roles.service.length > 0) {
+  if (context.roles.service !== undefined) {
     scopes.push(computeEffectiveAccess(tableId, roles, context.roles.service))
   }
 

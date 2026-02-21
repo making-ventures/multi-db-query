@@ -43,7 +43,7 @@ function base(overrides: Partial<SqlParts> = {}): SqlParts {
 describe('Trino — SELECT & FROM', () => {
   it('double-quote quoting', () => {
     const { sql } = dialect.generate(base(), [])
-    expect(sql).toBe('SELECT "t0"."id", "t0"."name" FROM "public"."users" AS "t0"')
+    expect(sql).toBe('SELECT "t0"."id" AS "t0__id", "t0"."name" AS "t0__name" FROM "public"."users" AS "t0"')
   })
 
   it('catalog-qualified table', () => {
@@ -232,7 +232,7 @@ describe('Trino — array operators', () => {
       elementType: 'string',
     }
     const { sql } = dialect.generate(base({ where: cond }), [['a', 'b']])
-    expect(sql).toContain('cardinality(array_except(?, "t0"."tags")) = 0')
+    expect(sql).toContain('cardinality(array_except(ARRAY[?, ?], "t0"."tags")) = 0')
   })
 
   it('containsAny via arrays_overlap', () => {
@@ -243,7 +243,7 @@ describe('Trino — array operators', () => {
       elementType: 'string',
     }
     const { sql } = dialect.generate(base({ where: cond }), [['x', 'y']])
-    expect(sql).toContain('arrays_overlap("t0"."tags", ?)')
+    expect(sql).toContain('arrays_overlap("t0"."tags", ARRAY[?, ?])')
   })
 
   it('isEmpty via cardinality', () => {
@@ -575,6 +575,19 @@ describe('Trino — HAVING additional', () => {
     expect(sql).toContain('HAVING "total" BETWEEN ? AND ?')
     expect(params).toEqual([100, 1000])
   })
+
+  it('having not between', () => {
+    const parts = base({
+      select: [col('t0', 'status')],
+      from: tbl('public.orders', 't0'),
+      groupBy: [col('t0', 'status')],
+      aggregations: [{ fn: 'sum', column: col('t0', 'total'), alias: 'total' }],
+      having: { alias: 'total', not: true, fromParamIndex: 0, toParamIndex: 1 },
+    })
+    const { sql, params } = dialect.generate(parts, [100, 1000])
+    expect(sql).toContain('HAVING "total" NOT BETWEEN ? AND ?')
+    expect(params).toEqual([100, 1000])
+  })
 })
 
 describe('Trino — ORDER BY additional', () => {
@@ -639,7 +652,7 @@ describe('Trino — full query', () => {
     const { sql, params } = dialect.generate(parts, [18, 2])
 
     expect(sql).toBe(
-      'SELECT DISTINCT "t0"."status", COUNT(*) AS "cnt"' +
+      'SELECT DISTINCT "t0"."status" AS "t0__status", COUNT(*) AS "cnt"' +
         ' FROM "public"."orders" AS "t0"' +
         ' INNER JOIN "public"."users" AS "t1" ON "t0"."user_id" = "t1"."id"' +
         ' WHERE "t1"."age" >= ?' +

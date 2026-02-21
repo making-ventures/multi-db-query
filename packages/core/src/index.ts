@@ -54,16 +54,13 @@ export {
   maskRows,
   resolveTableAccess,
 } from './access/access.js'
-export { applyMask } from './masking/masking.js'
+// Debug
+export { debugEntry, withDebugLog } from './debug/logger.js'
 // Dialects
 export { ClickHouseDialect } from './dialects/clickhouse.js'
 export type { SqlDialect } from './dialects/dialect.js'
 export { PostgresDialect } from './dialects/postgres.js'
 export { TrinoDialect } from './dialects/trino.js'
-// Debug
-export { debugEntry, withDebugLog } from './debug/logger.js'
-// Generator
-export { generateSql } from './generator/generator.js'
 export {
   escapeLike,
   isArrayCond,
@@ -74,6 +71,9 @@ export {
   isFn,
   isGroup,
 } from './generator/fragments.js'
+// Generator
+export { generateSql } from './generator/generator.js'
+export { applyMask } from './masking/masking.js'
 // Static provider helpers
 export { staticMetadata, staticRoles } from './metadata/providers.js'
 // Metadata Registry

@@ -1,7 +1,11 @@
 import type {
   CachedTableMeta,
   DatabaseEngine,
+  QueryColumnFilter,
   QueryDefinition,
+  QueryExistsFilter,
+  QueryFilter,
+  QueryFilterGroup,
   TableMeta,
 } from '@mkven/multi-db-validation'
 import { PlannerError } from '@mkven/multi-db-validation'
@@ -28,10 +32,44 @@ export function collectTables(query: QueryDefinition, snapshot: RegistrySnapshot
         tables.push(t)
         seen.add(t.id)
       }
+      // Also collect EXISTS tables from join filters
+      if (join.filters !== undefined) {
+        collectExistsTables(join.filters, snapshot, tables, seen)
+      }
     }
   }
 
+  // Collect tables from top-level EXISTS filters
+  if (query.filters !== undefined) {
+    collectExistsTables(query.filters, snapshot, tables, seen)
+  }
+
   return tables
+}
+
+type FilterEntry = QueryFilter | QueryColumnFilter | QueryFilterGroup | QueryExistsFilter
+
+function collectExistsTables(
+  filters: readonly FilterEntry[],
+  snapshot: RegistrySnapshot,
+  tables: TableMeta[],
+  seen: Set<string>,
+): void {
+  for (const filter of filters) {
+    if ('logic' in filter && 'conditions' in filter) {
+      collectExistsTables((filter as QueryFilterGroup).conditions, snapshot, tables, seen)
+    } else if (!('operator' in filter) && !('logic' in filter) && !('column' in filter) && 'table' in filter) {
+      const ef = filter as QueryExistsFilter
+      const t = snapshot.index.getTable(ef.table)
+      if (t !== undefined && !seen.has(t.id)) {
+        tables.push(t)
+        seen.add(t.id)
+      }
+      if (ef.filters !== undefined) {
+        collectExistsTables(ef.filters, snapshot, tables, seen)
+      }
+    }
+  }
 }
 
 // --- P0: Cache ---
@@ -188,11 +226,7 @@ export function tryMaterialized(
 
 // --- P3: Trino ---
 
-export function tryTrino(
-  tables: TableMeta[],
-  snapshot: RegistrySnapshot,
-  opts: PlannerOptions,
-): TrinoPlan | undefined {
+export function tryTrino(tables: TableMeta[], snapshot: RegistrySnapshot, opts: PlannerOptions): TrinoPlan | undefined {
   if (opts.trinoEnabled !== true) return undefined
 
   const catalogs = new Map<string, string>()

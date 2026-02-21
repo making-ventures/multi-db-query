@@ -6,13 +6,13 @@ import { applyMask, computeAllowedColumns, maskRows, resolveTableAccess } from '
 
 const usersTable: TableMeta = {
   id: 'users',
-  database: 'pg_main',
+  database: 'pg-main',
   physicalName: 'public.users',
   apiName: 'users',
   primaryKey: ['id'],
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
-    { apiName: 'name', physicalName: 'name', type: 'string', nullable: false },
+    { apiName: 'firstName', physicalName: 'first_name', type: 'string', nullable: false, maskingFn: 'name' },
     { apiName: 'email', physicalName: 'email', type: 'string', nullable: false, maskingFn: 'email' },
     { apiName: 'phone', physicalName: 'phone', type: 'string', nullable: true, maskingFn: 'phone' },
     { apiName: 'age', physicalName: 'age', type: 'int', nullable: true },
@@ -22,28 +22,29 @@ const usersTable: TableMeta = {
 
 const ordersTable: TableMeta = {
   id: 'orders',
-  database: 'pg_main',
+  database: 'pg-main',
   physicalName: 'public.orders',
   apiName: 'orders',
   primaryKey: ['id'],
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
-    { apiName: 'userId', physicalName: 'user_id', type: 'uuid', nullable: false },
-    { apiName: 'total', physicalName: 'total', type: 'decimal', nullable: false, maskingFn: 'number' },
-    { apiName: 'status', physicalName: 'status', type: 'string', nullable: false },
+    { apiName: 'customerId', physicalName: 'customer_id', type: 'uuid', nullable: false },
+    { apiName: 'total', physicalName: 'total_amount', type: 'decimal', nullable: false, maskingFn: 'number' },
+    { apiName: 'status', physicalName: 'order_status', type: 'string', nullable: false },
+    { apiName: 'createdAt', physicalName: 'created_at', type: 'timestamp', nullable: false, maskingFn: 'date' },
   ],
-  relations: [{ column: 'userId', references: { table: 'users', column: 'id' }, type: 'many-to-one' }],
+  relations: [{ column: 'customerId', references: { table: 'users', column: 'id' }, type: 'many-to-one' }],
 }
 
 const eventsTable: TableMeta = {
   id: 'events',
-  database: 'ch_analytics',
-  physicalName: 'events',
+  database: 'ch-analytics',
+  physicalName: 'default.events',
   apiName: 'events',
   primaryKey: ['id'],
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
-    { apiName: 'eventType', physicalName: 'event_type', type: 'string', nullable: false },
+    { apiName: 'type', physicalName: 'event_type', type: 'string', nullable: false },
   ],
   relations: [],
 }
@@ -52,7 +53,7 @@ const eventsTable: TableMeta = {
 const adminRole: RoleMeta = { id: 'admin', tables: '*' }
 const tenantUser: RoleMeta = {
   id: 'tenant-user',
-  tables: [{ tableId: 'orders', allowedColumns: ['id', 'userId', 'status'], maskedColumns: ['total'] }],
+  tables: [{ tableId: 'orders', allowedColumns: ['id', 'total', 'status', 'createdAt'], maskedColumns: ['total'] }],
 }
 const regionalManager: RoleMeta = {
   id: 'regional-manager',
@@ -72,7 +73,7 @@ const svcRoleMasking: RoleMeta = {
 }
 const viewerRole: RoleMeta = {
   id: 'viewer',
-  tables: [{ tableId: 'users', allowedColumns: ['id', 'name'] }],
+  tables: [{ tableId: 'users', allowedColumns: ['id', 'firstName'] }],
 }
 
 const allRolesMap = new Map<string, RoleMeta>([
@@ -104,16 +105,20 @@ describe('Scope resolution', () => {
     const access = resolveTableAccess(ordersTable, ctx, allRolesMap)
     expect(access.allowed).toBe(true)
     expect(access.columns.get('id')?.allowed).toBe(true)
-    expect(access.columns.get('userId')?.allowed).toBe(true)
+    expect(access.columns.get('total')?.allowed).toBe(true)
+    expect(access.columns.get('total')?.masked).toBe(true)
     expect(access.columns.get('status')?.allowed).toBe(true)
-    expect(access.columns.get('total')?.allowed).toBe(false)
+    expect(access.columns.get('createdAt')?.allowed).toBe(true)
+    expect(access.columns.get('customerId')?.allowed).toBe(false)
   })
 
   it('#14b column masking — total masked', () => {
     // First give tenant-user access to total to test masking
     const tenantWithTotal: RoleMeta = {
       id: 'tenant-total',
-      tables: [{ tableId: 'orders', allowedColumns: ['id', 'userId', 'status', 'total'], maskedColumns: ['total'] }],
+      tables: [
+        { tableId: 'orders', allowedColumns: ['id', 'customerId', 'status', 'total'], maskedColumns: ['total'] },
+      ],
     }
     const rolesMap = new Map(allRolesMap)
     rolesMap.set('tenant-total', tenantWithTotal)
@@ -156,7 +161,7 @@ describe('Scope resolution', () => {
   it('#38 columns omitted — returns role-allowed columns', () => {
     const ctx: ExecutionContext = { roles: { user: ['tenant-user'] } }
     const allowed = computeAllowedColumns(ordersTable, ctx, allRolesMap)
-    expect(allowed).toEqual(['id', 'userId', 'status'])
+    expect(allowed).toEqual(['id', 'total', 'status', 'createdAt'])
   })
 
   it('#95 empty scope intersection — ACCESS_DENIED', () => {
@@ -184,7 +189,7 @@ describe('Scope resolution', () => {
   it('#16 column trimming on byIds', () => {
     const ctx: ExecutionContext = { roles: { user: ['viewer'] } }
     const allowed = computeAllowedColumns(usersTable, ctx, allRolesMap)
-    expect(allowed).toEqual(['id', 'name'])
+    expect(allowed).toEqual(['id', 'firstName'])
     // email, phone, age not in allowed columns for viewer
     expect(allowed).not.toContain('email')
     expect(allowed).not.toContain('phone')

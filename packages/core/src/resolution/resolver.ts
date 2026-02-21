@@ -45,7 +45,7 @@ function isFilterGroup(f: FilterEntry): f is QueryFilterGroup {
 }
 
 function isExistsFilter(f: FilterEntry): f is QueryExistsFilter {
-  return 'table' in f && ('exists' in f || 'count' in f) && !('column' in f)
+  return 'table' in f && !('operator' in f) && !('logic' in f) && !('column' in f)
 }
 
 function isColumnFilter(f: FilterEntry): f is QueryColumnFilter {
@@ -124,13 +124,13 @@ class ResolutionContext {
     // Resolve WHERE
     const where = this.resolveWhere()
 
-    // Resolve GROUP BY
-    const groupBy = this.resolveGroupBy()
+    // Resolve GROUP BY — suppressed in count mode
+    const groupBy = isCountMode ? [] : this.resolveGroupBy()
 
-    // Resolve HAVING
-    const having = this.resolveHaving()
+    // Resolve HAVING — suppressed in count mode
+    const having = isCountMode ? undefined : this.resolveHaving()
 
-    // Resolve ORDER BY
+    // Resolve ORDER BY — suppressed in count mode
     const orderBy = isCountMode ? [] : this.resolveOrderBy(aggregations)
 
     const fromAlias = this.tableAliases.get(this.fromTable.id)
@@ -144,7 +144,7 @@ class ResolutionContext {
 
     const parts: SqlParts = {
       select,
-      distinct: this.query.distinct,
+      distinct: isCountMode ? undefined : this.query.distinct,
       from: fromRef,
       joins,
       where,
@@ -152,8 +152,8 @@ class ResolutionContext {
       having,
       aggregations,
       orderBy,
-      limit: this.query.limit,
-      offset: this.query.offset,
+      limit: isCountMode ? undefined : this.query.limit,
+      offset: isCountMode ? undefined : this.query.offset,
       countMode: isCountMode,
     }
 
@@ -209,7 +209,6 @@ class ResolutionContext {
     const columnMappings: ColumnMapping[] = []
 
     const hasAggregations = this.query.aggregations !== undefined && this.query.aggregations.length > 0
-    const hasGroupBy = this.query.groupBy !== undefined && this.query.groupBy.length > 0
     const requestedColumns = this.query.columns
 
     if (requestedColumns !== undefined && requestedColumns.length === 0 && hasAggregations) {
@@ -217,8 +216,8 @@ class ResolutionContext {
       return { select, columnMappings }
     }
 
-    if (requestedColumns === undefined && hasAggregations && hasGroupBy) {
-      // columns: undefined with aggregations → default to groupBy columns only
+    if (requestedColumns === undefined && hasAggregations) {
+      // columns: undefined with aggregations → default to groupBy columns only (zero if no groupBy)
       if (this.query.groupBy !== undefined) {
         for (const gb of this.query.groupBy) {
           const tableId = this.resolveQualifiedTableId(gb.table)
@@ -228,32 +227,64 @@ class ResolutionContext {
       return { select, columnMappings }
     }
 
-    // Regular column resolution
+    // Build candidate columns for collision detection (concept: L1727)
+    const candidates: Array<{ apiName: string; tableId: string; tableApiName: string }> = []
+
+    // From-table candidates
     if (requestedColumns !== undefined) {
       for (const colName of requestedColumns) {
-        this.addSelectColumn(select, columnMappings, colName, this.fromTable.id)
+        candidates.push({ apiName: colName, tableId: this.fromTable.id, tableApiName: this.fromTable.apiName })
       }
     } else {
-      // All allowed columns from the from table
       for (const col of this.fromTable.columns) {
         const eff = this.fromAccess.columns.get(col.apiName)
         if (eff?.allowed) {
-          this.addSelectColumn(select, columnMappings, col.apiName, this.fromTable.id)
+          candidates.push({ apiName: col.apiName, tableId: this.fromTable.id, tableApiName: this.fromTable.apiName })
         }
       }
     }
 
-    // Resolve join columns
+    // Join-table candidates
     if (this.query.joins !== undefined) {
       for (const join of this.query.joins) {
-        if (join.columns !== undefined && join.columns.length > 0) {
-          const joinTable = this.index.getTable(join.table)
-          if (joinTable === undefined) continue
+        const joinTable = this.index.getTable(join.table)
+        if (joinTable === undefined) continue
+
+        if (join.columns === undefined) {
+          for (const col of joinTable.columns) {
+            const eff = resolveTableAccess(joinTable, this.context, this.rolesById).columns.get(col.apiName)
+            if (eff?.allowed) {
+              candidates.push({ apiName: col.apiName, tableId: joinTable.id, tableApiName: join.table })
+            }
+          }
+        } else if (join.columns.length > 0) {
           for (const colName of join.columns) {
-            this.addSelectColumn(select, columnMappings, colName, joinTable.id, join.table)
+            candidates.push({ apiName: colName, tableId: joinTable.id, tableApiName: join.table })
           }
         }
+        // [] = no columns (join for filter only)
       }
+    }
+
+    // Detect collisions: apiNames that appear in more than one table
+    const apiNameTables = new Map<string, Set<string>>()
+    for (const c of candidates) {
+      let tables = apiNameTables.get(c.apiName)
+      if (tables === undefined) {
+        tables = new Set()
+        apiNameTables.set(c.apiName, tables)
+      }
+      tables.add(c.tableId)
+    }
+    const colliding = new Set<string>()
+    for (const [apiName, tables] of apiNameTables) {
+      if (tables.size > 1) colliding.add(apiName)
+    }
+
+    // Build select + mappings with collision-aware naming
+    for (const c of candidates) {
+      const qualify = colliding.has(c.apiName) ? c.tableApiName : undefined
+      this.addSelectColumn(select, columnMappings, c.apiName, c.tableId, qualify)
     }
 
     return { select, columnMappings }
@@ -283,9 +314,11 @@ class ResolutionContext {
       physicalName: col.physicalName,
       apiName: resultApiName,
       tableAlias: this.getAlias(tableId),
+      tableApiName: table.apiName,
       masked: effCol?.masked === true,
+      nullable: col.nullable,
       type: col.type,
-      maskingFn: col.maskingFn,
+      maskingFn: effCol?.maskingFn ?? col.maskingFn,
     })
   }
 
@@ -322,7 +355,7 @@ class ResolutionContext {
       if (leftCol === undefined || rightCol === undefined) return undefined
 
       return {
-        type: join.type ?? 'inner',
+        type: join.type ?? 'left',
         table: { physicalName: joinTable.physicalName, alias: joinAlias },
         leftColumn: { tableAlias: this.getAlias(this.fromTable.id), columnName: leftCol.physicalName },
         rightColumn: { tableAlias: joinAlias, columnName: rightCol.physicalName },
@@ -335,7 +368,7 @@ class ResolutionContext {
       if (leftCol === undefined || rightCol === undefined) return undefined
 
       return {
-        type: join.type ?? 'inner',
+        type: join.type ?? 'left',
         table: { physicalName: joinTable.physicalName, alias: joinAlias },
         leftColumn: { tableAlias: this.getAlias(this.fromTable.id), columnName: leftCol.physicalName },
         rightColumn: { tableAlias: joinAlias, columnName: rightCol.physicalName },
@@ -373,6 +406,22 @@ class ResolutionContext {
         const node = this.resolveFilterEntry(filter, this.fromTable)
         if (node !== undefined) {
           conditions.push(node)
+        }
+      }
+    }
+
+    // Join-scoped filters (concept: L496-509 — placed in WHERE, context is joined table)
+    if (this.query.joins !== undefined) {
+      for (const join of this.query.joins) {
+        if (join.filters !== undefined) {
+          const joinTable = this.index.getTable(join.table)
+          if (joinTable === undefined) continue
+          for (const filter of join.filters) {
+            const node = this.resolveFilterEntry(filter, joinTable)
+            if (node !== undefined) {
+              conditions.push(node)
+            }
+          }
         }
       }
     }

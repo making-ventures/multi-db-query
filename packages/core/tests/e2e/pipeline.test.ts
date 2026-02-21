@@ -33,6 +33,7 @@ const config: MetadataConfig = {
   databases: [
     { id: 'pg-main', engine: 'postgres' },
     { id: 'ch-analytics', engine: 'clickhouse' },
+    { id: 'iceberg-archive', engine: 'iceberg', trinoCatalog: 'iceberg_archive' },
   ],
   tables: [
     {
@@ -68,7 +69,19 @@ const config: MetadataConfig = {
       physicalName: 'default.events',
       columns: [
         { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
-        { apiName: 'type', physicalName: 'type', type: 'string', nullable: false },
+        { apiName: 'type', physicalName: 'event_type', type: 'string', nullable: false },
+      ],
+      primaryKey: ['id'],
+      relations: [],
+    },
+    {
+      id: 'orders-archive',
+      apiName: 'ordersArchive',
+      database: 'iceberg-archive',
+      physicalName: 'warehouse.orders_archive',
+      columns: [
+        { apiName: 'id', physicalName: 'id', type: 'int', nullable: false },
+        { apiName: 'total', physicalName: 'total', type: 'decimal', nullable: false },
       ],
       primaryKey: ['id'],
       relations: [],
@@ -80,7 +93,9 @@ const config: MetadataConfig = {
 
 const configWithCache: MetadataConfig = {
   ...config,
-  caches: [{ id: 'redis-main', engine: 'redis', tables: [{ tableId: 'users', keyPattern: 'user:{id}' }] }],
+  databases: config.databases.filter((d) => d.engine !== 'iceberg'),
+  tables: config.tables.filter((t) => t.database !== 'iceberg-archive'),
+  caches: [{ id: 'redis-main', engine: 'redis', tables: [{ tableId: 'users', keyPattern: 'users:{id}' }] }],
 }
 
 const roles: RoleMeta[] = [
@@ -221,6 +236,26 @@ describe('Pipeline — query modes', () => {
       expect(result.count).toBe(10)
     }
   })
+
+  it('#76b: count mode — meta.columns is empty (no aggregation entries)', async () => {
+    const db = await createMultiDb({
+      metadataProvider: staticMetadata(config),
+      roleProvider: staticRoles(roles),
+      executors: { 'pg-main': mockExecutor([{ count: 5 }]) },
+    })
+
+    const result = await db.query({
+      definition: {
+        from: 'orders',
+        executeMode: 'count',
+        aggregations: [{ column: '*', fn: 'count', alias: 'cnt' }],
+      },
+      context: adminCtx,
+    })
+
+    expect(result.kind).toBe('count')
+    expect(result.meta.columns).toHaveLength(0)
+  })
 })
 
 describe('Pipeline — debug', () => {
@@ -252,8 +287,8 @@ describe('Pipeline — debug', () => {
 describe('Pipeline — cache', () => {
   it('#35: masking on cached results', async () => {
     const cacheData = new Map<string, Record<string, unknown> | null>([
-      ['user:1', { id: '1', name: 'Alice', email: 'alice@example.com' }],
-      ['user:2', { id: '2', name: 'Bob', email: 'bob@example.com' }],
+      ['users:1', { id: '1', name: 'Alice', email: 'alice@example.com' }],
+      ['users:2', { id: '2', name: 'Bob', email: 'bob@example.com' }],
     ])
 
     const db = await createMultiDb({
@@ -300,8 +335,8 @@ describe('Pipeline — cache', () => {
   it('#10: partial cache hit — cached + direct merge', async () => {
     // IDs 1,2 in cache; ID 3 miss → query DB for ID 3 only, merge results
     const cacheData = new Map<string, Record<string, unknown> | null>([
-      ['user:1', { id: '1', name: 'Alice', email: 'alice@test.com' }],
-      ['user:2', { id: '2', name: 'Bob', email: 'bob@test.com' }],
+      ['users:1', { id: '1', name: 'Alice', email: 'alice@test.com' }],
+      ['users:2', { id: '2', name: 'Bob', email: 'bob@test.com' }],
     ])
 
     const db = await createMultiDb({
@@ -682,5 +717,36 @@ describe('Pipeline — error serialization', () => {
       const str = JSON.stringify(json)
       expect(str).toContain('QUERY_FAILED')
     }
+  })
+})
+
+describe('Pipeline — Iceberg direct (P1 via trino)', () => {
+  it('#79b: Iceberg direct query uses trino executor and catalog', async () => {
+    let capturedSql = ''
+    const trinoEx: DbExecutor = {
+      execute: async (sql) => {
+        capturedSql = sql
+        return [{ t0__id: 1, t0__total: 100 }]
+      },
+      ping: async () => {},
+      close: async () => {},
+    }
+
+    const db = await createMultiDb({
+      metadataProvider: staticMetadata(config),
+      roleProvider: staticRoles(roles),
+      executors: { trino: trinoEx },
+    })
+
+    const result = await db.query({
+      definition: { from: 'ordersArchive' },
+      context: adminCtx,
+    })
+
+    expect(result.kind).toBe('data')
+    // SQL should reference the catalog-qualified table
+    expect(capturedSql).toContain('iceberg_archive')
+    expect(capturedSql).toContain('orders_archive')
+    expect(result.meta.strategy).toBe('direct')
   })
 })

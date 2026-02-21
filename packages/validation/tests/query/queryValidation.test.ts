@@ -16,15 +16,15 @@ const adminRole: RoleMeta = {
 const viewerRole: RoleMeta = {
   id: 'viewer',
   tables: [
-    { tableId: 'users', allowedColumns: ['id', 'name', 'email', 'age', 'createdAt'] },
-    { tableId: 'orders', allowedColumns: ['id', 'userId', 'total', 'status', 'createdAt'] },
-    { tableId: 'events', allowedColumns: ['id', 'userId', 'eventType', 'payload', 'createdAt', 'tags'] },
+    { tableId: 'users', allowedColumns: ['id', 'firstName', 'email', 'age', 'createdAt'] },
+    { tableId: 'orders', allowedColumns: ['id', 'customerId', 'total', 'status', 'createdAt'] },
+    { tableId: 'events', allowedColumns: ['id', 'userId', 'type', 'payload', 'timestamp', 'tags'] },
   ],
 }
 
 const restrictedRole: RoleMeta = {
   id: 'restricted',
-  tables: [{ tableId: 'users', allowedColumns: ['id', 'name'] }],
+  tables: [{ tableId: 'users', allowedColumns: ['id', 'firstName'] }],
 }
 
 const allRoles: RoleMeta[] = [adminRole, viewerRole, restrictedRole]
@@ -127,7 +127,7 @@ describe('Rule 5 — Filter validity', () => {
     const idx = buildIndex()
     const q: QueryDefinition = {
       from: 'users',
-      filters: [{ column: 'name', operator: 'isNull' }],
+      filters: [{ column: 'firstName', operator: 'isNull' }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).not.toBeNull()
@@ -159,7 +159,7 @@ describe('Rule 5 — Filter validity', () => {
     const idx = buildIndex()
     const q: QueryDefinition = {
       from: 'users',
-      filters: [{ column: 'name', operator: 'in', value: [] }],
+      filters: [{ column: 'firstName', operator: 'in', value: [] }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).not.toBeNull()
@@ -170,7 +170,7 @@ describe('Rule 5 — Filter validity', () => {
     const idx = buildIndex()
     const q: QueryDefinition = {
       from: 'users',
-      filters: [{ column: 'name', operator: 'in', value: ['a', null, 'b'] }],
+      filters: [{ column: 'firstName', operator: 'in', value: ['a', null, 'b'] }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).not.toBeNull()
@@ -214,7 +214,7 @@ describe('Rule 5 — Filter validity', () => {
     const idx = buildIndex()
     const q: QueryDefinition = {
       from: 'users',
-      filters: [{ column: 'name', operator: 'levenshteinLte', value: { text: 'test', maxDistance: -1 } }],
+      filters: [{ column: 'firstName', operator: 'levenshteinLte', value: { text: 'test', maxDistance: -1 } }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).not.toBeNull()
@@ -247,7 +247,7 @@ describe('Rule 5 — Filter validity', () => {
     const idx = buildIndex()
     const q: QueryDefinition = {
       from: 'users',
-      filters: [{ column: 'name', operator: 'arrayContains', value: 'test' }],
+      filters: [{ column: 'firstName', operator: 'arrayContains', value: 'test' }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).not.toBeNull()
@@ -275,6 +275,61 @@ describe('Rule 5 — Filter validity', () => {
     expect(err?.errors.some((e) => e.code === 'INVALID_FILTER' && e.details.table === 'orders')).toBe(true)
   })
 
+  it('#69 join-scoped filter resolves against joined table', () => {
+    const idx = buildIndex()
+    const q: QueryDefinition = {
+      from: 'orders',
+      columns: ['id'],
+      joins: [
+        {
+          table: 'users',
+          columns: [],
+          filters: [{ column: 'firstName', operator: '=', value: 'Alice' }],
+        },
+      ],
+    }
+    // firstName exists on users (joined table), not on orders (from table)
+    const err = validateQuery(q, adminCtx, idx, allRoles)
+    expect(err).toBeNull()
+  })
+
+  it('join-scoped filter rejects column not on joined table', () => {
+    const idx = buildIndex()
+    const q: QueryDefinition = {
+      from: 'orders',
+      columns: ['id'],
+      joins: [
+        {
+          table: 'users',
+          columns: [],
+          filters: [{ column: 'total', operator: '>', value: 100 }],
+        },
+      ],
+    }
+    // total exists on orders but NOT on users (the join's default context)
+    const err = validateQuery(q, adminCtx, idx, allRoles)
+    expect(err).not.toBeNull()
+    expect(err?.errors.some((e) => e.code === 'UNKNOWN_COLUMN')).toBe(true)
+  })
+
+  it('join-scoped filter can explicitly reference from table', () => {
+    const idx = buildIndex()
+    const q: QueryDefinition = {
+      from: 'orders',
+      columns: ['id'],
+      joins: [
+        {
+          table: 'users',
+          columns: [],
+          filters: [{ column: 'total', table: 'orders', operator: '>', value: 100 }],
+        },
+      ],
+    }
+    // Explicit table: 'orders' override — should validate against orders table
+    const err = validateQuery(q, adminCtx, idx, allRoles)
+    expect(err).toBeNull()
+  })
+
   it('#146 arrayContains wrong element type', () => {
     const idx = buildIndex()
     const q: QueryDefinition = {
@@ -300,7 +355,7 @@ describe('Rule 5 — Filter validity', () => {
     const idx = buildIndex()
     const q: QueryDefinition = {
       from: 'users',
-      filters: [{ column: 'name', operator: 'in', value: ['Alice', 'Bob'] }],
+      filters: [{ column: 'firstName', operator: 'in', value: ['Alice', 'Bob'] }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).toBeNull()
@@ -326,7 +381,7 @@ describe('Rule 5 — QueryColumnFilter', () => {
     const idx = buildIndex()
     const q: QueryDefinition = {
       from: 'events',
-      filters: [{ column: 'tags', operator: '=', refColumn: 'eventType' }],
+      filters: [{ column: 'tags', operator: '=', refColumn: 'type' }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).not.toBeNull()
@@ -366,7 +421,7 @@ describe('Rule 5 — Filter groups', () => {
         {
           logic: 'or',
           conditions: [
-            { column: 'name', operator: '=', value: 'Alice' },
+            { column: 'firstName', operator: '=', value: 'Alice' },
             { column: 'nonExistent', operator: '=', value: 'test' },
           ],
         },
@@ -421,13 +476,13 @@ describe('Rule 7 — Group By validity', () => {
     const idx = buildIndex()
     const q: QueryDefinition = {
       from: 'orders',
-      columns: ['status', 'userId'],
+      columns: ['status', 'customerId'],
       groupBy: [{ column: 'status' }],
       aggregations: [{ column: 'total', fn: 'sum', alias: 'totalAmount' }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).not.toBeNull()
-    expect(err?.errors.some((e) => e.code === 'INVALID_GROUP_BY' && e.details.column === 'userId')).toBe(true)
+    expect(err?.errors.some((e) => e.code === 'INVALID_GROUP_BY' && e.details.column === 'customerId')).toBe(true)
   })
 
   it('#167 array column in groupBy rejected', () => {
@@ -446,7 +501,7 @@ describe('Rule 7 — Group By validity', () => {
     const idx = buildIndex()
     const q: QueryDefinition = {
       from: 'users',
-      columns: ['name'],
+      columns: ['firstName'],
       groupBy: [{ column: 'status', table: 'orders' }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
@@ -630,7 +685,7 @@ describe('Rule 10 — ByIds validity', () => {
     const q: QueryDefinition = {
       from: 'users',
       byIds: ['id1'],
-      groupBy: [{ column: 'name' }],
+      groupBy: [{ column: 'firstName' }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).not.toBeNull()
@@ -741,6 +796,19 @@ describe('Rule 12 — Exists filter validity', () => {
     const err = validateQuery(q, restrictedCtx, idx, allRoles)
     expect(err).not.toBeNull()
     expect(err?.errors.some((e) => e.code === 'ACCESS_DENIED')).toBe(true)
+  })
+
+  it('#187b EXISTS against joined table relation is valid', () => {
+    const idx = buildIndex()
+    // invoices has relation to orders (orderId → orders.id)
+    // from: users, join: orders → EXISTS invoices should be valid because invoices relates to joined orders
+    const q: QueryDefinition = {
+      from: 'users',
+      joins: [{ table: 'orders' }],
+      filters: [{ table: 'invoices', exists: true }],
+    }
+    const err = validateQuery(q, adminCtx, idx, allRoles)
+    expect(err).toBeNull()
   })
 })
 
@@ -868,9 +936,18 @@ describe('Edge cases', () => {
   it('query with no roles context — no restrictions', () => {
     const idx = buildIndex()
     const ctx: ExecutionContext = { roles: {} }
-    const q: QueryDefinition = { from: 'users', columns: ['id', 'name', 'email'] }
+    const q: QueryDefinition = { from: 'users', columns: ['id', 'firstName', 'email'] }
     const err = validateQuery(q, ctx, idx, allRoles)
     expect(err).toBeNull()
+  })
+
+  it('empty user roles array denies all access', () => {
+    const idx = buildIndex()
+    const ctx: ExecutionContext = { roles: { user: [] } }
+    const q: QueryDefinition = { from: 'users', columns: ['id'] }
+    const err = validateQuery(q, ctx, idx, allRoles)
+    expect(err).not.toBeNull()
+    expect(err?.errors.some((e) => e.code === 'ACCESS_DENIED')).toBe(true)
   })
 
   it('#234-235 nested EXISTS validates against parent table', () => {
@@ -894,6 +971,52 @@ describe('Edge cases', () => {
         },
       ],
     }
+    const err = validateQuery(q, adminCtx, idx, allRoles)
+    expect(err).toBeNull()
+  })
+
+  it('#159 non-integer count.value is rejected', () => {
+    const idx = buildIndex()
+    const q: QueryDefinition = {
+      from: 'users',
+      filters: [{ table: 'orders', count: { operator: '>=', value: 2.5 } }],
+    }
+    const err = validateQuery(q, adminCtx, idx, allRoles)
+    expect(err).not.toBeNull()
+    expect(err?.errors.some((e) => e.code === 'INVALID_EXISTS')).toBe(true)
+  })
+
+  it('#165 nested EXISTS with invalid relation is rejected', () => {
+    const idx = buildIndex()
+    // orders -> invoices (exists) -> users (nested exists)
+    // invoices has no relation to users, so inner EXISTS should fail
+    const q: QueryDefinition = {
+      from: 'orders',
+      filters: [
+        {
+          table: 'invoices',
+          exists: true,
+          filters: [
+            {
+              table: 'users',
+              exists: true,
+            },
+          ],
+        },
+      ],
+    }
+    const err = validateQuery(q, adminCtx, idx, allRoles)
+    expect(err).not.toBeNull()
+    expect(err?.errors.some((e) => e.code === 'INVALID_EXISTS')).toBe(true)
+  })
+
+  it('#157 exists: false + count — count takes precedence', () => {
+    const idx = buildIndex()
+    const q: QueryDefinition = {
+      from: 'users',
+      filters: [{ table: 'orders', exists: false, count: { operator: '>=', value: 3 } }],
+    }
+    // exists is ignored when count is present — should pass validation
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).toBeNull()
   })

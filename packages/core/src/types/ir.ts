@@ -152,7 +152,9 @@ export interface ColumnMapping {
   physicalName: string
   apiName: string
   tableAlias: string
+  tableApiName: string
   masked: boolean
+  nullable: boolean
   type: ColumnType
   maskingFn?: 'email' | 'phone' | 'name' | 'uuid' | 'number' | 'date' | 'full' | undefined
 }

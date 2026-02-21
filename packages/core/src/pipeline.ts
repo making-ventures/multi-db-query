@@ -1,25 +1,32 @@
 import type {
+  ColumnType,
   DebugLogEntry,
   ExecutionContext,
   HealthCheckResult,
+  QueryAggregation,
+  QueryColumnFilter,
   QueryDefinition,
+  QueryExistsFilter,
+  QueryFilter,
+  QueryFilterGroup,
   QueryResult,
   QueryResultMeta,
+  TableMeta,
 } from '@mkven/multi-db-validation'
 import { ConnectionError, ExecutionError, validateQuery } from '@mkven/multi-db-validation'
 
 import type { EffectiveColumn } from './access/access.js'
-import { maskRows, resolveTableAccess } from './access/access.js'
+import { maskRows } from './access/access.js'
 import { debugEntry, withDebugLog } from './debug/logger.js'
 import { generateSql } from './generator/generator.js'
 import type { RegistrySnapshot } from './metadata/registry.js'
 import { MetadataRegistry } from './metadata/registry.js'
-import type { CachePlan, DialectName, MaterializedPlan, QueryPlan, TrinoPlan } from './planner/planner.js'
+import type { CachePlan, DialectName, DirectPlan, MaterializedPlan, QueryPlan, TrinoPlan } from './planner/planner.js'
 import { planQuery } from './planner/planner.js'
 import type { ResolveResult } from './resolution/resolver.js'
 import { resolveNames } from './resolution/resolver.js'
 import type { CacheProvider, DbExecutor } from './types/interfaces.js'
-import type { SqlParts } from './types/ir.js'
+import type { ColumnMapping, CorrelatedSubquery, SqlParts, WhereNode } from './types/ir.js'
 import type { MetadataProvider, RoleProvider } from './types/providers.js'
 
 // ── Public Types ───────────────────────────────────────────────
@@ -104,9 +111,8 @@ async function runQuery(
   if (vErr !== null) throw vErr
   if (debug) log.push(debugEntry('validation', 'Validated', Date.now() - t0))
 
-  // 2. Access control — resolve per-column masking
+  // 2. Access control timing (masking now derived from ColumnMapping in finishResult)
   const t1 = Date.now()
-  const maskingMap = resolveMaskingMap(definition, context, snapshot)
   if (debug) log.push(debugEntry('access-control', 'Access resolved', Date.now() - t1))
 
   // 3. Plan
@@ -120,6 +126,10 @@ async function runQuery(
   const resolved = resolveNames(definition, context, snapshot.index, snapshot.index.rolesById)
   if (plan.strategy === 'materialized') overrideTables(resolved.parts, plan, definition, snapshot)
   if (plan.strategy === 'trino') setCatalogs(resolved.parts, plan, definition, snapshot)
+  // Iceberg P1: direct + trino dialect → set catalog from trinoCatalog
+  if (plan.strategy === 'direct' && plan.dialect === 'trino') {
+    setDirectTrinoCatalog(resolved.parts, plan, snapshot)
+  }
   if (debug) log.push(debugEntry('name-resolution', 'Names resolved', Date.now() - t3))
 
   // 5. Generate SQL
@@ -147,7 +157,6 @@ async function runQuery(
       gen,
       resolved,
       dialectName,
-      maskingMap,
       planningMs,
       generationMs,
       debug,
@@ -156,7 +165,8 @@ async function runQuery(
   }
 
   // 6c. SQL execution (P1 / P2 / P3)
-  const dbId = plan.strategy === 'trino' ? 'trino' : plan.database
+  // Iceberg databases have no standalone executor — always use 'trino' when dialect is trino
+  const dbId = plan.strategy === 'trino' ? 'trino' : plan.dialect === 'trino' ? 'trino' : plan.database
   const executor = executors[dbId]
   if (executor === undefined) {
     throw new ExecutionError({ code: 'EXECUTOR_MISSING', database: dbId })
@@ -177,7 +187,6 @@ async function runQuery(
     rows,
     resolved,
     definition,
-    maskingMap,
     plan,
     dialectName,
     snapshot,
@@ -201,7 +210,6 @@ async function cachePath(
   gen: { sql: string; params: unknown[] },
   resolved: ResolveResult,
   dialectName: DialectName,
-  maskingMap: ReadonlyMap<string, EffectiveColumn>,
   planningMs: number,
   generationMs: number,
   debug: boolean,
@@ -245,7 +253,6 @@ async function cachePath(
       hits,
       resolved,
       definition,
-      maskingMap,
       plan,
       dialectName,
       snapshot,
@@ -267,8 +274,7 @@ async function cachePath(
   const missingDef = queryIds === byIds ? definition : { ...definition, byIds: queryIds }
   const missingResolved =
     queryIds === byIds ? resolved : resolveNames(missingDef, context, snapshot.index, snapshot.index.rolesById)
-  const missingGen =
-    queryIds === byIds ? gen : generateSql(plan, missingResolved.parts, missingResolved.params)
+  const missingGen = queryIds === byIds ? gen : generateSql(plan, missingResolved.parts, missingResolved.params)
 
   const t5 = Date.now()
   let rows: Record<string, unknown>[]
@@ -291,7 +297,6 @@ async function cachePath(
     allRows,
     resolved,
     definition,
-    maskingMap,
     plan,
     dialectName,
     snapshot,
@@ -309,7 +314,6 @@ function finishResult(
   rows: Record<string, unknown>[],
   resolved: ResolveResult,
   definition: QueryDefinition,
-  maskingMap: ReadonlyMap<string, EffectiveColumn>,
   plan: QueryPlan,
   dialectName: DialectName,
   snapshot: RegistrySnapshot,
@@ -320,7 +324,14 @@ function finishResult(
   log: DebugLogEntry[],
 ): QueryResult {
   const aggAliases = new Set(definition.aggregations?.map((a) => a.alias) ?? [])
-  const masked = maskRows(rows, maskingMap, aggAliases)
+
+  // Remap rows: SQL alias keys (t0__physical_name) → apiName keys
+  const remapped = remapRows(rows, resolved.columnMappings)
+
+  // Build masking map from ColumnMapping (apiName-keyed, aligned with remapped rows)
+  const colMaskingMap = buildColumnMaskingMap(resolved.columnMappings)
+  const masked = maskRows(remapped, colMaskingMap, aggAliases)
+
   const meta = buildMeta(plan, resolved, dialectName, definition, snapshot, planningMs, generationMs, executionMs)
 
   if (resolved.mode === 'count') {
@@ -338,6 +349,47 @@ function extractCount(rows: Record<string, unknown>[]): number {
   if (typeof v === 'bigint') return Number(v)
   if (typeof v === 'string') return Number.parseInt(v, 10) || 0
   return 0
+}
+
+// ── Row Remapping ──────────────────────────────────────────────
+
+/**
+ * Remap row keys from SQL alias convention ({tableAlias}__{physicalName})
+ * to apiNames using ColumnMapping[].
+ * Aggregation alias keys (already correct) pass through unchanged.
+ */
+function remapRows(rows: Record<string, unknown>[], columnMappings: ColumnMapping[]): Record<string, unknown>[] {
+  if (columnMappings.length === 0) return rows
+
+  // Build remap: SQL alias → apiName
+  const remap = new Map<string, string>()
+  for (const cm of columnMappings) {
+    remap.set(`${cm.tableAlias}__${cm.physicalName}`, cm.apiName)
+  }
+
+  return rows.map((row) => {
+    const result: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(row)) {
+      result[remap.get(key) ?? key] = value
+    }
+    return result
+  })
+}
+
+/**
+ * Build masking map from ColumnMapping[] — keys are apiNames (collision-aware).
+ */
+function buildColumnMaskingMap(columnMappings: ColumnMapping[]): ReadonlyMap<string, EffectiveColumn> {
+  const map = new Map<string, EffectiveColumn>()
+  for (const cm of columnMappings) {
+    map.set(cm.apiName, {
+      apiName: cm.apiName,
+      allowed: true,
+      masked: cm.masked,
+      maskingFn: cm.maskingFn,
+    })
+  }
+  return map
 }
 
 // ── Metadata Building ──────────────────────────────────────────
@@ -381,10 +433,25 @@ function buildMeta(
   const columns: QueryResultMeta['columns'] = resolved.columnMappings.map((cm) => ({
     apiName: cm.apiName,
     type: cm.type,
-    nullable: true,
-    fromTable: definition.from,
+    nullable: cm.nullable,
+    fromTable: cm.tableApiName,
     masked: cm.masked,
   }))
+
+  // Append aggregation alias entries (suppressed in count mode — concept: meta.columns is empty)
+  if (definition.aggregations !== undefined && resolved.mode !== 'count') {
+    for (const agg of definition.aggregations) {
+      const aggType = inferAggType(agg, definition, snapshot)
+      const fromTableApiName = agg.table ?? definition.from
+      columns.push({
+        apiName: agg.alias,
+        type: aggType,
+        nullable: agg.fn === 'count' ? false : inferAggNullable(agg, definition, snapshot),
+        fromTable: fromTableApiName,
+        masked: false,
+      })
+    }
+  }
 
   // Timing
   const timing: QueryResultMeta['timing'] =
@@ -412,38 +479,33 @@ function targetDb(plan: QueryPlan): string {
     case 'materialized':
       return plan.database
     case 'cache':
-      return plan.fallbackDatabase
+      return plan.cacheId
     case 'trino':
       return 'trino'
   }
 }
 
-// ── Access Control ─────────────────────────────────────────────
+function inferAggType(agg: QueryAggregation, definition: QueryDefinition, snapshot: RegistrySnapshot): ColumnType {
+  if (agg.fn === 'count') return 'int'
+  if (agg.fn === 'avg') return 'decimal'
+  // sum/min/max → source column type
+  if (agg.column === '*') return 'int' // count(*) already handled; sum/min/max on * is unusual
+  const tableApiName = agg.table ?? definition.from
+  const table = snapshot.index.tablesByApiName.get(tableApiName)
+  if (table === undefined) return 'decimal'
+  const col = table.columns.find((c) => c.apiName === agg.column)
+  return col?.type ?? 'decimal'
+}
 
-function resolveMaskingMap(
-  definition: QueryDefinition,
-  context: ExecutionContext,
-  snapshot: RegistrySnapshot,
-): ReadonlyMap<string, EffectiveColumn> {
-  const map = new Map<string, EffectiveColumn>()
-
-  const addTable = (apiName: string): void => {
-    const table = snapshot.index.tablesByApiName.get(apiName)
-    if (table !== undefined) {
-      const access = resolveTableAccess(table, context, snapshot.index.rolesById)
-      for (const [name, col] of access.columns) {
-        if (!map.has(name)) map.set(name, col)
-      }
-    }
-  }
-
-  addTable(definition.from)
-  if (definition.joins !== undefined) {
-    for (const join of definition.joins) {
-      addTable(join.table)
-    }
-  }
-  return map
+function inferAggNullable(agg: QueryAggregation, definition: QueryDefinition, snapshot: RegistrySnapshot): boolean {
+  // count is always non-nullable (handled at call site)
+  // sum/avg/min/max return NULL when source is nullable (all rows could be NULL)
+  if (agg.column === '*') return false
+  const tableApiName = agg.table ?? definition.from
+  const table = snapshot.index.tablesByApiName.get(tableApiName)
+  if (table === undefined) return true
+  const col = table.columns.find((c) => c.apiName === agg.column)
+  return col?.nullable ?? true
 }
 
 // ── Table Overrides (P2 Materialized) ──────────────────────────
@@ -473,6 +535,16 @@ function overrideTables(
       }
     }
   }
+
+  // Override EXISTS subquery tables
+  const existsMap = collectExistsTableMap(definition, snapshot)
+  walkWhereSubqueries(parts.where, (sub) => {
+    const meta = existsMap.get(sub.from.physicalName)
+    if (meta !== undefined) {
+      const ov = plan.tableOverrides.get(meta.id)
+      if (ov !== undefined) sub.from.physicalName = ov
+    }
+  })
 }
 
 // ── Catalog Qualifiers (P3 Trino) ──────────────────────────────
@@ -496,6 +568,71 @@ function setCatalogs(parts: SqlParts, plan: TrinoPlan, definition: QueryDefiniti
         }
       }
     }
+  }
+
+  // Set catalogs on EXISTS subquery tables
+  const existsMap = collectExistsTableMap(definition, snapshot)
+  walkWhereSubqueries(parts.where, (sub) => {
+    const meta = existsMap.get(sub.from.physicalName)
+    if (meta !== undefined) {
+      const cat = plan.catalogs.get(meta.database)
+      if (cat !== undefined) sub.from.catalog = cat
+    }
+  })
+}
+
+// ── Iceberg Direct Catalog (P1 with trino dialect) ─────────────
+
+function setDirectTrinoCatalog(parts: SqlParts, plan: DirectPlan, snapshot: RegistrySnapshot): void {
+  const db = snapshot.config.databases.find((d) => d.id === plan.database)
+  if (db?.trinoCatalog !== undefined) {
+    parts.from.catalog = db.trinoCatalog
+  }
+  // Also set catalogs on EXISTS subquery tables (all same database in P1 direct)
+  walkWhereSubqueries(parts.where, (sub) => {
+    if (db?.trinoCatalog !== undefined) {
+      sub.from.catalog = db.trinoCatalog
+    }
+  })
+}
+
+// ── WHERE Tree Walk — collect EXISTS subquery table refs ────────
+
+function collectExistsTableMap(definition: QueryDefinition, snapshot: RegistrySnapshot): Map<string, TableMeta> {
+  const result = new Map<string, TableMeta>()
+  type FilterEntry = QueryFilter | QueryColumnFilter | QueryFilterGroup | QueryExistsFilter
+
+  function walk(filters: readonly FilterEntry[]): void {
+    for (const f of filters) {
+      if ('logic' in f && 'conditions' in f) {
+        walk((f as QueryFilterGroup).conditions)
+      } else if (!('operator' in f) && !('logic' in f) && !('column' in f) && 'table' in f) {
+        const ef = f as QueryExistsFilter
+        const t = snapshot.index.tablesByApiName.get(ef.table)
+        if (t !== undefined) result.set(t.physicalName, t)
+        if (ef.filters !== undefined) walk(ef.filters)
+      }
+    }
+  }
+
+  if (definition.filters !== undefined) walk(definition.filters)
+  if (definition.joins !== undefined) {
+    for (const join of definition.joins) {
+      if (join.filters !== undefined) walk(join.filters)
+    }
+  }
+  return result
+}
+
+function walkWhereSubqueries(node: WhereNode | undefined, handler: (sub: CorrelatedSubquery) => void): void {
+  if (node === undefined) return
+  if ('logic' in node && 'conditions' in node) {
+    const group = node as { conditions: WhereNode[] }
+    for (const c of group.conditions) walkWhereSubqueries(c, handler)
+  } else if ('subquery' in node) {
+    const sub = (node as { subquery: CorrelatedSubquery }).subquery
+    handler(sub)
+    walkWhereSubqueries(sub.where, handler)
   }
 }
 

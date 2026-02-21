@@ -1,3 +1,13 @@
+import {
+  escapeLike,
+  isArrayCond,
+  isBetween,
+  isColCond,
+  isCounted,
+  isExists,
+  isFn,
+  isGroup,
+} from '../generator/fragments.js'
 import type {
   AggregationClause,
   ColumnRef,
@@ -19,7 +29,6 @@ import type {
   WhereGroup,
   WhereNode,
 } from '../types/ir.js'
-import { escapeLike, isArrayCond, isBetween, isColCond, isCounted, isExists, isFn, isGroup } from '../generator/fragments.js'
 import type { SqlDialect } from './dialect.js'
 
 // --- Trino Dialect ---
@@ -88,7 +97,7 @@ class TrinoGenerator {
 
     const items: string[] = []
     for (const col of parts.select) {
-      items.push(quoteCol(col))
+      items.push(`${quoteCol(col)} AS "${col.tableAlias}__${col.columnName}"`)
     }
     for (const a of parts.aggregations) {
       items.push(this.aggClause(a))
@@ -205,9 +214,9 @@ class TrinoGenerator {
     if (idx === undefined) return `${col} IS NOT NULL`
 
     if (op === 'contains') return `contains(${col}, ${this.ref(idx)})`
-    if (op === 'containsAll') return `cardinality(array_except(${this.ref(idx)}, ${col})) = 0`
+    if (op === 'containsAll') return `cardinality(array_except(ARRAY[${this.expandArray(idx)}], ${col})) = 0`
     // containsAny
-    return `arrays_overlap(${col}, ${this.ref(idx)})`
+    return `arrays_overlap(${col}, ARRAY[${this.expandArray(idx)}])`
   }
 
   // WhereGroup

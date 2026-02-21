@@ -15,7 +15,7 @@ import { planQuery } from '../../src/planner/planner.js'
 // --- Fixtures ---
 
 const pgMain: DatabaseMeta = { id: 'pg-main', engine: 'postgres', trinoCatalog: 'pg_main' }
-const pgSecondary: DatabaseMeta = { id: 'pg-secondary', engine: 'postgres', trinoCatalog: 'pg_secondary' }
+const pgTenant: DatabaseMeta = { id: 'pg-tenant', engine: 'postgres', trinoCatalog: 'pg_tenant' }
 const chAnalytics: DatabaseMeta = { id: 'ch-analytics', engine: 'clickhouse', trinoCatalog: 'ch_analytics' }
 const icebergArchive: DatabaseMeta = { id: 'iceberg-archive', engine: 'iceberg', trinoCatalog: 'iceberg_archive' }
 const pgNoCatalog: DatabaseMeta = { id: 'pg-no-catalog', engine: 'postgres' }
@@ -42,10 +42,10 @@ const ordersTable: TableMeta = {
   primaryKey: ['id'],
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
-    { apiName: 'userId', physicalName: 'user_id', type: 'uuid', nullable: false },
-    { apiName: 'total', physicalName: 'total', type: 'decimal', nullable: false },
+    { apiName: 'customerId', physicalName: 'customer_id', type: 'uuid', nullable: false },
+    { apiName: 'total', physicalName: 'total_amount', type: 'decimal', nullable: false },
   ],
-  relations: [{ column: 'userId', references: { table: 'users', column: 'id' }, type: 'many-to-one' as const }],
+  relations: [{ column: 'customerId', references: { table: 'users', column: 'id' }, type: 'many-to-one' as const }],
 }
 
 const productsTable: TableMeta = {
@@ -57,6 +57,7 @@ const productsTable: TableMeta = {
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
     { apiName: 'name', physicalName: 'name', type: 'string', nullable: false },
+    { apiName: 'category', physicalName: 'category', type: 'string', nullable: false },
     { apiName: 'price', physicalName: 'price', type: 'decimal', nullable: false },
   ],
   relations: [],
@@ -64,7 +65,7 @@ const productsTable: TableMeta = {
 
 const tenantsTable: TableMeta = {
   id: 'tenants',
-  database: 'pg-secondary',
+  database: 'pg-tenant',
   physicalName: 'public.tenants',
   apiName: 'tenants',
   primaryKey: ['id'],
@@ -77,7 +78,7 @@ const tenantsTable: TableMeta = {
 
 const invoicesTable: TableMeta = {
   id: 'invoices',
-  database: 'pg-secondary',
+  database: 'pg-tenant',
   physicalName: 'public.invoices',
   apiName: 'invoices',
   primaryKey: ['id'],
@@ -97,15 +98,15 @@ const eventsTable: TableMeta = {
   columns: [
     { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
     { apiName: 'userId', physicalName: 'user_id', type: 'uuid', nullable: false },
-    { apiName: 'type', physicalName: 'type', type: 'string', nullable: false },
+    { apiName: 'type', physicalName: 'event_type', type: 'string', nullable: false },
   ],
   relations: [],
 }
 
 const archiveTable: TableMeta = {
-  id: 'ordersArchive',
+  id: 'orders-archive',
   database: 'iceberg-archive',
-  physicalName: 'archive.orders',
+  physicalName: 'warehouse.orders_archive',
   apiName: 'ordersArchive',
   primaryKey: ['id'],
   columns: [
@@ -137,9 +138,9 @@ const tenantSync: ExternalSync = {
 const ordersSyncToCh: ExternalSync = {
   sourceTable: 'orders',
   targetDatabase: 'ch-analytics',
-  targetPhysicalName: 'replicas.orders',
+  targetPhysicalName: 'default.orders_replica',
   method: 'debezium',
-  estimatedLag: 'minutes',
+  estimatedLag: 'seconds',
 }
 
 const eventsSyncToPg: ExternalSync = {
@@ -159,12 +160,12 @@ const ordersSyncToIceberg: ExternalSync = {
 }
 
 // Cache
-const usersCache: CachedTableMeta = { tableId: 'users', keyPattern: 'user:{id}' }
-const usersCacheSubset: CachedTableMeta = { tableId: 'users', keyPattern: 'user:{id}', columns: ['id', 'name'] }
+const usersCache: CachedTableMeta = { tableId: 'users', keyPattern: 'users:{id}' }
+const usersCacheSubset: CachedTableMeta = { tableId: 'users', keyPattern: 'users:{id}', columns: ['id', 'name'] }
 const productsCacheSubset: CachedTableMeta = {
   tableId: 'products',
   keyPattern: 'product:{id}',
-  columns: ['id', 'name'],
+  columns: ['id', 'name', 'category'],
 }
 
 const redisCache: CacheMeta = { id: 'redis-main', engine: 'redis', tables: [usersCache] }
@@ -181,7 +182,7 @@ function snap(overrides: {
   syncs?: ExternalSync[]
   caches?: CacheMeta[]
 }): RegistrySnapshot {
-  const databases = overrides.databases ?? [pgMain, pgSecondary, chAnalytics, icebergArchive]
+  const databases = overrides.databases ?? [pgMain, pgTenant, chAnalytics, icebergArchive]
   const tables = overrides.tables ?? [
     usersTable,
     ordersTable,
@@ -276,6 +277,14 @@ describe('Planner — P1: Direct (single database)', () => {
       expect(plan.database).toBe('iceberg-archive')
       expect(plan.dialect).toBe('trino')
     }
+  })
+
+  it('#79c: EXISTS filter table in different DB prevents P1 direct', () => {
+    // orders is pg-main, events is ch-analytics — EXISTS filter references events
+    const s = snap({ syncs: [] })
+    const plan = planQuery({ from: 'orders', filters: [{ table: 'events', exists: true }] }, s, { trinoEnabled: true })
+    // Should NOT be direct — tables span pg-main + ch-analytics
+    expect(plan.strategy).not.toBe('direct')
   })
 
   it('#7: PG + Iceberg (no sync) → trino cross-db', () => {
@@ -379,11 +388,11 @@ describe('Planner — P2: Materialized replica', () => {
     if (plan.strategy === 'materialized') {
       expect(plan.database).toBe('ch-analytics')
       expect(plan.dialect).toBe('clickhouse')
-      expect(plan.tableOverrides.get('orders')).toBe('replicas.orders')
+      expect(plan.tableOverrides.get('orders')).toBe('default.orders_replica')
     }
   })
 
-  it('#12: freshness=hours, lag=minutes → materialized OK', () => {
+  it('#12: freshness=hours, lag=seconds → materialized OK', () => {
     const s = snap({ syncs: [ordersSyncToCh] })
     const plan = planQuery({ from: 'events', joins: [{ table: 'orders' }], freshness: 'hours' }, s)
     expect(plan.strategy).toBe('materialized')
@@ -407,7 +416,7 @@ describe('Planner — P3: Trino cross-database', () => {
     expect(plan.strategy).toBe('trino')
     if (plan.strategy === 'trino') {
       expect(plan.catalogs.get('pg-main')).toBe('pg_main')
-      expect(plan.catalogs.get('pg-secondary')).toBe('pg_secondary')
+      expect(plan.catalogs.get('pg-tenant')).toBe('pg_tenant')
     }
   })
 
@@ -462,8 +471,9 @@ describe('Planner — P4: Error', () => {
   })
 
   it('#57: freshness unmet → FRESHNESS_UNMET', () => {
-    // orders+events cross-DB, sync exists but freshness=seconds, lag=minutes
-    const s = snap({ syncs: [ordersSyncToCh] })
+    // orders+events cross-DB, sync has lag=hours but query requires seconds
+    const slowSync: ExternalSync = { ...ordersSyncToCh, estimatedLag: 'hours' }
+    const s = snap({ syncs: [slowSync] })
     expect(() => {
       planQuery({ from: 'events', joins: [{ table: 'orders' }], freshness: 'seconds' }, s)
     }).toThrow(PlannerError)
@@ -476,9 +486,9 @@ describe('Planner — P4: Error', () => {
   })
 
   it('#59: unreachable tables → UNREACHABLE_TABLES', () => {
-    // metrics in pg-no-catalog, tenants in pg-secondary, no syncs, no trino catalog
+    // metrics in pg-no-catalog, tenants in pg-tenant, no syncs, no trino catalog
     const s = snap({
-      databases: [pgNoCatalog, pgSecondary],
+      databases: [pgNoCatalog, pgTenant],
       tables: [metricsTable, tenantsTable],
       syncs: [],
     })
