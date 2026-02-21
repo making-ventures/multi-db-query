@@ -1,9 +1,13 @@
 # @mkven/multi-db — HTTP Contract Test Suite
 
-This document defines the **full contract test suite** for any implementation of the `@mkven/multi-db` HTTP API. The contract verifies behavioral correctness through two endpoints:
+This document defines the **full contract test suite** for any implementation of the `@mkven/multi-db` HTTP API. The contract verifies behavioral correctness through four endpoints:
 
 - `POST /query` — accepts `{ definition, context }`, returns `QueryResult`
 - `GET /health` — returns `HealthCheckResult`
+- `POST /validate/query` — accepts `{ definition, context }`, returns `{ valid: true }` or throws `ValidationError` (400)
+- `POST /validate/config` — accepts `{ metadata, roles }`, returns `{ valid: true }` or throws `ConfigError` (400)
+
+The validation endpoints require **no database connections** — they run pure validation logic only. This means all validation tests (~60 tests in sections 12, 16) can run without a live database, enabling fast feedback during implementation.
 
 Any server (TypeScript, Go, Rust, Java, etc.) that wraps a multi-db query engine must pass all tests described here to be considered a conforming implementation.
 
@@ -714,20 +718,55 @@ These tests verify that user-provided values in filters cannot inject SQL. Each 
 
 ---
 
-## 17. Edge Cases
+## 17. Validation Endpoints
+
+These tests verify the dedicated validation endpoints that run without DB connections.
+
+### 17.1 Query Validation
 
 | ID | Test | Definition | Assertions |
 |---|---|---|---|
-| C1500 | Empty result set | orders, `status = 'nonexistent_status_xyz'` | `kind === 'data'`; `data` is empty array; `meta.columns` still present |
-| C1501 | Single row result | orders, `byIds: [1]` | `data.length === 1` |
-| C1502 | Large in-list | orders, `status in [50+ values]` | query executes without error |
-| C1503 | Nullable column in result | orders columns: [id, discount] | `discount` can be null in returned data |
-| C1504 | Boolean column values | orders columns: [id, isPaid] | `isPaid` is `true`, `false`, or `null` — proper boolean (not 0/1) |
-| C1505 | Timestamp format | orders columns: [createdAt] | timestamp is ISO 8601 string (or number); consistent format across implementations |
-| C1506 | Date format | invoices columns: [dueDate] | date is ISO date string (YYYY-MM-DD) |
-| C1507 | Array column in result | products columns: [name, labels] | `labels` is JSON array (e.g. `["sale", "new"]`) or null |
-| C1508 | Decimal precision | orders columns: [total] | `total` is a number with decimal precision preserved |
-| C1509 | Multiple filters (implicit AND) | orders, 2 top-level filters | both filter conditions applied (AND logic) |
+| C1600 | Valid query passes | POST `/validate/query` with `{ definition: { from: 'orders', columns: ['id'] }, context: { roles: { user: ['admin'] } } }` | response: `{ valid: true }` |
+| C1601 | Unknown table rejected | POST `/validate/query` with `from: 'nonExistentTable'` | 400 `ValidationError` with `UNKNOWN_TABLE` |
+| C1602 | Unknown column rejected | POST `/validate/query` with invalid column | 400 `ValidationError` with `UNKNOWN_COLUMN` |
+| C1603 | Access denied rejected | POST `/validate/query` with restricted column (tenant-user) | 400 `ValidationError` with `ACCESS_DENIED` |
+| C1604 | Invalid filter rejected | POST `/validate/query` with `>` on uuid column | 400 `ValidationError` with `INVALID_FILTER` |
+| C1605 | Invalid value rejected | POST `/validate/query` with `between` missing `to` | 400 `ValidationError` with `INVALID_VALUE` |
+| C1606 | Multiple errors collected | POST `/validate/query` with multiple issues | 400 `ValidationError` with multiple `errors[]` entries |
+| C1607 | Unknown role rejected | POST `/validate/query` with `user: ['nonexistent']` | 400 `ValidationError` with `UNKNOWN_ROLE` |
+| C1608 | No DB connection used | POST `/validate/query` (server has no executors configured) | still returns `{ valid: true }` for valid query — proves zero I/O |
+| C1609 | Same error format as /query | Compare error from `/validate/query` vs `/query` for same invalid input | identical `code`, `errors[]` structure, `fromTable` |
+
+### 17.2 Config Validation
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1620 | Valid config passes | POST `/validate/config` with `{ metadata: {...}, roles: [...] }` | response: `{ valid: true }` |
+| C1621 | Invalid apiName format | POST `/validate/config` with table apiName `'Order_Items'` | 400 `ConfigError` with `INVALID_API_NAME` |
+| C1622 | Duplicate apiName | POST `/validate/config` with two tables having apiName `'orders'` | 400 `ConfigError` with `DUPLICATE_API_NAME` |
+| C1623 | Invalid DB reference | POST `/validate/config` with table referencing non-existent database | 400 `ConfigError` with `INVALID_REFERENCE` |
+| C1624 | Invalid relation | POST `/validate/config` with relation referencing non-existent table | 400 `ConfigError` with `INVALID_RELATION` |
+| C1625 | Invalid sync reference | POST `/validate/config` with ExternalSync referencing missing table | 400 `ConfigError` with `INVALID_SYNC` |
+| C1626 | Invalid cache config | POST `/validate/config` with CacheMeta referencing missing table | 400 `ConfigError` with `INVALID_CACHE` |
+| C1627 | Multiple config errors | POST `/validate/config` with multiple issues | 400 `ConfigError` with multiple `errors[]` entries |
+| C1628 | Duplicate column apiName | POST `/validate/config` with two columns same apiName in one table | 400 `ConfigError` with `DUPLICATE_API_NAME` |
+
+---
+
+## 18. Edge Cases
+
+| ID | Test | Definition | Assertions |
+|---|---|---|---|
+| C1700 | Empty result set | orders, `status = 'nonexistent_status_xyz'` | `kind === 'data'`; `data` is empty array; `meta.columns` still present |
+| C1701 | Single row result | orders, `byIds: [1]` | `data.length === 1` |
+| C1702 | Large in-list | orders, `status in [50+ values]` | query executes without error |
+| C1703 | Nullable column in result | orders columns: [id, discount] | `discount` can be null in returned data |
+| C1704 | Boolean column values | orders columns: [id, isPaid] | `isPaid` is `true`, `false`, or `null` — proper boolean (not 0/1) |
+| C1705 | Timestamp format | orders columns: [createdAt] | timestamp is ISO 8601 string (or number); consistent format across implementations |
+| C1706 | Date format | invoices columns: [dueDate] | date is ISO date string (YYYY-MM-DD) |
+| C1707 | Array column in result | products columns: [name, labels] | `labels` is JSON array (e.g. `["sale", "new"]`) or null |
+| C1708 | Decimal precision | orders columns: [total] | `total` is a number with decimal precision preserved |
+| C1709 | Multiple filters (implicit AND) | orders, 2 top-level filters | both filter conditions applied (AND logic) |
 
 ---
 
@@ -735,25 +774,26 @@ These tests verify that user-provided values in filters cannot inject SQL. Each 
 
 For implementation developers, verify the following groups pass in order:
 
-1. **Health Check** (C1300-C1303) — server is running and connected
-2. **Execute Modes** (C001-C025) — basic response shapes correct
-3. **Debug Mode** (C030-C034) — debug logging works
-4. **Filtering** (C100-C196) — all 31 operators + groups + qualifiers
-5. **Joins** (C200-C207) — left/inner, multi-table, column selection
-6. **Aggregations** (C300-C309) — all 5 functions, groupBy interaction
-7. **GROUP BY & HAVING** (C320-C328) — grouping + HAVING conditions
-8. **ORDER BY, LIMIT, OFFSET, DISTINCT** (C400-C407) — pagination + sorting
-9. **byIds** (C500-C504) — primary key shortcut
-10. **EXISTS** (C600-C607) — subqueries, counted variant
-11. **Access Control** (C700-C723) — roles, scopes, intersection
-12. **Masking** (C800-C808) — column masking, meta reporting
-13. **Validation Errors** (C900-C1030) — all 14 rules verified
-14. **Meta Verification** (C1100-C1108) — response metadata correctness
-15. **Error Deserialization** (C1200-C1205) — HTTP error transport
-16. **SQL Injection** (C1400-C1406) — security
-17. **Edge Cases** (C1500-C1509) — nulls, types, empty results
+1. **Validation Endpoints** (C1600-C1628) — no DB needed, fast feedback *(start here)*
+2. **Health Check** (C1300-C1303) — server is running and connected
+3. **Execute Modes** (C001-C025) — basic response shapes correct
+4. **Debug Mode** (C030-C034) — debug logging works
+5. **Filtering** (C100-C196) — all 31 operators + groups + qualifiers
+6. **Joins** (C200-C207) — left/inner, multi-table, column selection
+7. **Aggregations** (C300-C309) — all 5 functions, groupBy interaction
+8. **GROUP BY & HAVING** (C320-C328) — grouping + HAVING conditions
+9. **ORDER BY, LIMIT, OFFSET, DISTINCT** (C400-C407) — pagination + sorting
+10. **byIds** (C500-C504) — primary key shortcut
+11. **EXISTS** (C600-C607) — subqueries, counted variant
+12. **Access Control** (C700-C723) — roles, scopes, intersection
+13. **Masking** (C800-C808) — column masking, meta reporting
+14. **Validation Errors** (C900-C1030) — all 14 rules verified (via /query)
+15. **Meta Verification** (C1100-C1108) — response metadata correctness
+16. **Error Deserialization** (C1200-C1205) — HTTP error transport
+17. **SQL Injection** (C1400-C1406) — security
+18. **Edge Cases** (C1700-C1709) — nulls, types, empty results
 
-Total: **~210 contract tests**
+Total: **~230 contract tests**
 
 ---
 
@@ -766,3 +806,4 @@ Total: **~210 contract tests**
 - **Column masking:** Masking is a post-query operation. Data is fetched normally, then masked before returning. The `maskingFn` from column metadata determines *how* to mask; the role's `maskedColumns` determines *which* columns to mask.
 - **Meta consistency:** `meta.columns` must accurately reflect the actual keys in `data[]` rows. If column names are qualified due to collisions (e.g. `orders.id`), `meta.columns[].apiName` must match the qualified key.
 - **Seed data:** Use the exact seed data from the [Fixture](#fixture) section. Assertions on row counts and values depend on this data.
+- **Validation endpoints:** `/validate/query` and `/validate/config` must run pure validation logic with zero I/O. They share the same error format as `/query`. Implementation developers should start with validation endpoint tests (section 17) — they require no database and provide fast feedback on metadata handling.
