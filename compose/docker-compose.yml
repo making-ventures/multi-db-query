@@ -17,7 +17,7 @@ services:
         condition: service_healthy
 
   postgres:
-    image: postgres:18.1-alpine
+    image: postgres:18.2-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -33,7 +33,7 @@ services:
       retries: 10
 
   clickhouse:
-    image: clickhouse/clickhouse-server:25.12.1
+    image: clickhouse/clickhouse-server:25.12.6
     environment:
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: clickhouse
@@ -82,7 +82,7 @@ services:
       "
 
   nessie:
-    image: ghcr.io/projectnessie/nessie:0.106.0
+    image: ghcr.io/projectnessie/nessie:0.107.2
     ports:
       - "19120:19120"
     healthcheck:
@@ -118,7 +118,7 @@ services:
       retries: 30
 
   redis:
-    image: redis:8.0-alpine
+    image: redis:8.6-alpine
     ports:
       - "6379:6379"
     healthcheck:
