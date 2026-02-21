@@ -797,6 +797,11 @@ These tests verify that user-provided inputs — filter values, column/table nam
 | C1407 | SQL injection in `notIn` filter | orders, `status notIn ["active'; DROP TABLE orders; --"]` | value parameterized; no injection |
 | C1408 | SQL injection in `levenshteinLte` text | users, `firstName levenshteinLte { text: "'; DROP TABLE users; --", maxDistance: 3 }` | both `text` and `maxDistance` parameterized; no injection |
 | C1409 | SQL injection in `arrayContains` value | products, `labels arrayContains "sale'; DROP TABLE products; --"` | value parameterized; no injection |
+| C1431 | SQL injection in `icontains` value | users, `email icontains "'; DROP TABLE users; --"` | PG: `ILIKE $1` parameterized; no injection |
+| C1432 | SQL injection in `notBetween` value | orders, `total notBetween { from: "0; DROP TABLE orders", to: 100 }` | rejected or treated as literal |
+| C1433 | SQL injection in `endsWith` value | users, `email endsWith "'; DROP TABLE users; --"` | value escaped and parameterized; no injection |
+| C1434 | SQL injection in `arrayContainsAll` value | products, `labels arrayContainsAll ["sale'; DROP TABLE products; --"]` | PG: `@>` with array param; value parameterized; no injection |
+| C1435 | SQL injection in `arrayContainsAny` value | products, `labels arrayContainsAny ["sale'; DROP TABLE products; --"]` | PG: `&&` with array param; value parameterized; no injection |
 
 ### 16.2 Identifier Injection
 
@@ -835,6 +840,12 @@ Tests 16.1–16.3 target pg-main tables, so only the **PostgreSQL** dialect's pa
 | C1425 | CH `between` filter injection | events, `timestamp between { from: "2024-01-01'; DROP TABLE events; --", to: "2024-12-31" }` | both bounds parameterized via `{p1:DateTime}` and `{p2:DateTime}`; no injection |
 | C1426 | CH `levenshteinLte` injection | events, `type levenshteinLte { text: "'; DROP TABLE events; --", maxDistance: 5 }` | mapped to `editDistance()` function; text via `{pN:String}`, threshold via `{pN:UInt32}`; no injection |
 | C1427 | CH `startsWith` injection | events, `type startsWith "'; DROP TABLE events; --"` | ClickHouse uses native `startsWith()` function (not LIKE); value parameterized via `{pN:String}`; no injection |
+| C1436 | CH `endsWith` injection | events, `type endsWith "'; DROP TABLE events; --"` | CH uses native `endsWith()` function (not LIKE); value parameterized via `{pN:String}`; no injection |
+| C1437 | CH `icontains` injection | events, `type icontains "'; DROP TABLE events; --"` | CH uses `ilike(col, {pN:String})`; value escaped and parameterized; no injection |
+| C1438 | CH `notBetween` injection | events, `timestamp notBetween { from: "2024-01-01'; DROP TABLE events;--", to: "2024-12-31" }` | CH wraps as `NOT (col BETWEEN {p1:DateTime} AND {p2:DateTime})`; both bounds parameterized; no injection |
+| C1439 | CH `arrayContains` injection | events, `tags arrayContains "x'; DROP TABLE events; --"` | CH uses `has(col, {p1:String})`; value parameterized; no injection |
+| C1440 | CH `arrayContainsAll` injection | events, `tags arrayContainsAll ["x'; DROP TABLE events; --"]` | CH uses `hasAll(col, [{p1:String}, ...])`; each element parameterized; no injection |
+| C1441 | CH `notIn` injection | events, `type notIn ["purchase'; DROP TABLE events; --"]` | `NOT IN tuple({p1:String}, ...)` — each element individually parameterized; no injection |
 
 #### Trino
 
@@ -846,6 +857,10 @@ Tests 16.1–16.3 target pg-main tables, so only the **PostgreSQL** dialect's pa
 | C1428 | Trino `in` filter injection | events JOIN users, filter `users.email in ["x'; DROP TABLE users; --"]` | expanded `IN (?, ?, ...)` — each element individually parameterized; no injection |
 | C1429 | Trino `contains` filter injection | events JOIN users, filter `users.email contains "'; DROP TABLE users; --"` | escapeLike applied, `LIKE ? ESCAPE '\\'` — Trino-specific ESCAPE clause; no injection |
 | C1430 | Trino `levenshteinLte` injection | events JOIN users, filter `users.firstName levenshteinLte { text: "'; DROP TABLE users; --", maxDistance: 5 }` | mapped to `levenshtein_distance()` function; both params via `?`; no injection |
+| C1442 | Trino `icontains` injection | events JOIN users, filter `users.email icontains "'; DROP TABLE users; --"` | `lower(col) LIKE lower(?) ESCAPE '\\'` — Trino-specific `lower()` emulation + ESCAPE; no injection |
+| C1443 | Trino `arrayContains` injection | events JOIN users and products, filter `products.labels arrayContains "x'; DROP TABLE products; --"` | Trino uses `contains(col, ?)`; value parameterized; no injection |
+| C1444 | Trino `arrayContainsAll` injection | events JOIN users and products, filter `products.labels arrayContainsAll ["x'; DROP TABLE products; --"]` | Trino uses `cardinality(array_except(ARRAY[?, ...], col)) = 0`; each element parameterized; no injection |
+| C1445 | Trino `arrayContainsAny` injection | events JOIN users and products, filter `products.labels arrayContainsAny ["x'; DROP TABLE products; --"]` | Trino uses `arrays_overlap(col, ARRAY[?, ...])`; each element parameterized; no injection |
 
 ---
 
@@ -929,7 +944,7 @@ For implementation developers, verify the following groups pass in order:
 17. **SQL Injection** (C1400-C1406) — security
 18. **Edge Cases** (C1700-C1714) — nulls, types, strategies, distinct+count, empty groups
 
-Total: **313 contract tests**
+Total: **328 contract tests**
 
 ---
 
