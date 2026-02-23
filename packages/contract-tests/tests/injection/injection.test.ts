@@ -49,7 +49,7 @@ function sqlOnlyProxy(db: { query: QueryContract['query'] }): QueryContract {
   }
 }
 
-// ── Run the canonical 66 injection tests ───────────────────────
+// ── Run the canonical 74 injection tests ───────────────────────
 
 describeInjectionContract('unit (sql-only)', async () => {
   const options: CreateMultiDbOptions = {
