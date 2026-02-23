@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SqlDialect } from '../../src/dialects/dialect.js'
 import type {
+  HavingGroup,
   SqlParts,
   WhereArrayCondition,
   WhereBetween,
@@ -154,6 +155,40 @@ export interface DialectTestConfig extends Record<string, Expect | string> {
   // ── Catalog-qualified ──────────────────────────────────
   catalogTable: Expect
   catalogJoin: Expect
+
+  // ── HAVING (extended) ──────────────────────────────────
+  havingAndGroup: Expect
+  havingOrGroup: Expect
+  havingNotGroup: Expect
+  havingIsNull: Expect
+
+  // ── Complex WHERE ──────────────────────────────────────
+  existsInsideOrGroup: Expect
+  deeplyNestedWhere: Expect
+  mixedFilterGroupExists: Expect
+  countedWithSubFilters: Expect
+
+  // ── Nested EXISTS ──────────────────────────────────────
+  nestedExists: Expect
+
+  // ── Join-related ───────────────────────────────────────
+  filterOnJoinedColumn: Expect
+  threeTableJoin: Expect
+  multiJoinPerTableFilters: Expect
+  aggOnJoinedColumn: Expect
+
+  // ── Cross-table ORDER BY ───────────────────────────────
+  crossTableOrderBy: Expect
+
+  // ── Array ops on int[] ─────────────────────────────────
+  arrayContainsInt: Expect
+  arrayContainsAllInt: Expect
+  arrayInGroup: Expect
+  arrayOnJoinedTable: Expect
+  arrayContainsAllSingleElement: Expect
+
+  // ── distinct + groupBy ─────────────────────────────────
+  distinctGroupBy: Expect
 
   // ── Full query ─────────────────────────────────────────
   fullQuery: Expect
@@ -733,6 +768,375 @@ export function describeSharedDialectTests(dialect: SqlDialect, cfg: DialectTest
           ],
         })
         check(parts, [], cfg.catalogJoin)
+      })
+    })
+
+    // ── HAVING (extended) ─────────────────────────────────
+
+    describe('HAVING (extended)', () => {
+      it('having AND group (#72)', () => {
+        const parts = base({
+          select: [col('t0', 'status')],
+          from: tbl(`${sub}.orders`, 't0'),
+          groupBy: [col('t0', 'status')],
+          aggregations: [
+            { fn: 'sum', column: col('t0', 'total'), alias: 'totalSum' },
+            { fn: 'count', column: '*', alias: 'cnt' },
+          ],
+          having: {
+            logic: 'and',
+            conditions: [
+              { column: 'totalSum', operator: '>', paramIndex: 0 },
+              { column: 'cnt', operator: '>', paramIndex: 1 },
+            ],
+          } satisfies HavingGroup,
+        })
+        check(parts, [100, 5], cfg.havingAndGroup)
+      })
+
+      it('having OR group (#73)', () => {
+        const parts = base({
+          select: [col('t0', 'status')],
+          from: tbl(`${sub}.orders`, 't0'),
+          groupBy: [col('t0', 'status')],
+          aggregations: [
+            { fn: 'sum', column: col('t0', 'total'), alias: 'totalSum' },
+            { fn: 'avg', column: col('t0', 'total'), alias: 'avgTotal' },
+          ],
+          having: {
+            logic: 'or',
+            conditions: [
+              { column: 'totalSum', operator: '>', paramIndex: 0 },
+              { column: 'avgTotal', operator: '>', paramIndex: 1 },
+            ],
+          } satisfies HavingGroup,
+        })
+        check(parts, [1000, 200], cfg.havingOrGroup)
+      })
+
+      it('having NOT group (#144)', () => {
+        const parts = base({
+          select: [col('t0', 'status')],
+          from: tbl(`${sub}.orders`, 't0'),
+          groupBy: [col('t0', 'status')],
+          aggregations: [
+            { fn: 'sum', column: col('t0', 'total'), alias: 'totalSum' },
+            { fn: 'count', column: '*', alias: 'cnt' },
+          ],
+          having: {
+            logic: 'or',
+            not: true,
+            conditions: [
+              { column: 'totalSum', operator: '>', paramIndex: 0 },
+              { column: 'cnt', operator: '>', paramIndex: 1 },
+            ],
+          } satisfies HavingGroup,
+        })
+        check(parts, [100, 5], cfg.havingNotGroup)
+      })
+
+      it('having isNull (#197)', () => {
+        const parts = base({
+          select: [col('t0', 'status')],
+          from: tbl(`${sub}.orders`, 't0'),
+          groupBy: [col('t0', 'status')],
+          aggregations: [{ fn: 'sum', column: col('t0', 'discount'), alias: 'discountSum' }],
+          having: { column: 'discountSum', operator: 'isNull' },
+        })
+        check(parts, [], cfg.havingIsNull)
+      })
+    })
+
+    // ── Complex WHERE ─────────────────────────────────────
+
+    describe('complex WHERE', () => {
+      it('EXISTS inside OR group (#27)', () => {
+        const cond: WhereGroup = {
+          logic: 'or',
+          conditions: [
+            { column: col('t0', 'status'), operator: '=', paramIndex: 0 } as WhereCondition,
+            {
+              exists: true,
+              subquery: {
+                from: tbl(`${sub}.orders`, 's0'),
+                join: { leftColumn: col('t0', 'id'), rightColumn: col('s0', 'user_id') },
+              },
+            } as WhereExists,
+          ],
+        }
+        check(base({ where: cond }), ['active'], cfg.existsInsideOrGroup)
+      })
+
+      it('deeply nested WHERE (#70)', () => {
+        const cond: WhereGroup = {
+          logic: 'or',
+          conditions: [
+            { column: col('t0', 'status'), operator: '=', paramIndex: 0 } as WhereCondition,
+            {
+              logic: 'and',
+              conditions: [
+                { column: col('t0', 'age'), operator: '>', paramIndex: 1 } as WhereCondition,
+                {
+                  logic: 'or',
+                  conditions: [
+                    { column: col('t0', 'name'), operator: '=', paramIndex: 2 } as WhereCondition,
+                    { column: col('t0', 'name'), operator: '=', paramIndex: 3 } as WhereCondition,
+                  ],
+                } as WhereGroup,
+              ],
+            } as WhereGroup,
+          ],
+        }
+        check(base({ where: cond }), ['active', 18, 'Alice', 'Bob'], cfg.deeplyNestedWhere)
+      })
+
+      it('mixed filter + group + exists (#71)', () => {
+        const cond: WhereGroup = {
+          logic: 'and',
+          conditions: [
+            { column: col('t0', 'status'), operator: '=', paramIndex: 0 } as WhereCondition,
+            {
+              logic: 'or',
+              conditions: [
+                { column: col('t0', 'age'), operator: '>', paramIndex: 1 } as WhereCondition,
+                { column: col('t0', 'age'), operator: '<', paramIndex: 2 } as WhereCondition,
+              ],
+            } as WhereGroup,
+            {
+              exists: true,
+              subquery: {
+                from: tbl(`${sub}.orders`, 's0'),
+                join: { leftColumn: col('t0', 'id'), rightColumn: col('s0', 'user_id') },
+              },
+            } as WhereExists,
+          ],
+        }
+        check(base({ where: cond }), ['active', 65, 18], cfg.mixedFilterGroupExists)
+      })
+
+      it('counted subquery with sub-filters (#161)', () => {
+        const subWhere: WhereCondition = { column: col('s0', 'status'), operator: '=', paramIndex: 1 }
+        const cond: WhereCountedSubquery = {
+          subquery: {
+            from: tbl(`${sub}.orders`, 's0'),
+            join: { leftColumn: col('t0', 'id'), rightColumn: col('s0', 'user_id') },
+            where: subWhere,
+          },
+          operator: '=',
+          countParamIndex: 0,
+        }
+        check(base({ where: cond }), [2, 'paid'], cfg.countedWithSubFilters)
+      })
+    })
+
+    // ── Nested EXISTS ─────────────────────────────────────
+
+    describe('nested EXISTS', () => {
+      it('nested EXISTS (#227)', () => {
+        const innerExists: WhereExists = {
+          exists: true,
+          subquery: {
+            from: tbl(`${sub}.tenants`, 's1'),
+            join: { leftColumn: col('s0', 'tenant_id'), rightColumn: col('s1', 'id') },
+          },
+        }
+        const outerExists: WhereExists = {
+          exists: true,
+          subquery: {
+            from: tbl(`${sub}.invoices`, 's0'),
+            join: { leftColumn: col('t0', 'id'), rightColumn: col('s0', 'order_id') },
+            where: innerExists,
+          },
+        }
+        check(base({ where: outerExists }), [], cfg.nestedExists)
+      })
+    })
+
+    // ── Join-related ──────────────────────────────────────
+
+    describe('join-related', () => {
+      it('filter on joined column (#69/#138)', () => {
+        const parts = base({
+          joins: [
+            {
+              type: 'left',
+              table: tbl(`${sub}.products`, 't1'),
+              leftColumn: col('t0', 'product_id'),
+              rightColumn: col('t1', 'id'),
+            },
+          ],
+          where: { column: col('t1', 'category'), operator: '=', paramIndex: 0 } as WhereCondition,
+        })
+        check(parts, ['electronics'], cfg.filterOnJoinedColumn)
+      })
+
+      it('3-table JOIN (#127)', () => {
+        const parts = base({
+          joins: [
+            {
+              type: 'left',
+              table: tbl(`${sub}.orders`, 't1'),
+              leftColumn: col('t0', 'id'),
+              rightColumn: col('t1', 'user_id'),
+            },
+            {
+              type: 'inner',
+              table: tbl(`${sub}.products`, 't2'),
+              leftColumn: col('t1', 'product_id'),
+              rightColumn: col('t2', 'id'),
+            },
+          ],
+        })
+        check(parts, [], cfg.threeTableJoin)
+      })
+
+      it('multi-join with per-table filters (#147)', () => {
+        const parts = base({
+          joins: [
+            {
+              type: 'left',
+              table: tbl(`${sub}.products`, 't1'),
+              leftColumn: col('t0', 'product_id'),
+              rightColumn: col('t1', 'id'),
+            },
+            {
+              type: 'left',
+              table: tbl(`${sub}.categories`, 't2'),
+              leftColumn: col('t1', 'category_id'),
+              rightColumn: col('t2', 'id'),
+            },
+          ],
+          where: {
+            logic: 'and',
+            conditions: [
+              { column: col('t1', 'active'), operator: '=', paramIndex: 0 } as WhereCondition,
+              { column: col('t2', 'name'), operator: '=', paramIndex: 1 } as WhereCondition,
+            ],
+          } as WhereGroup,
+        })
+        check(parts, [true, 'electronics'], cfg.multiJoinPerTableFilters)
+      })
+
+      it('aggregation on joined column (#126)', () => {
+        const parts = base({
+          select: [col('t0', 'status')],
+          from: tbl(`${sub}.orders`, 't0'),
+          joins: [
+            {
+              type: 'inner',
+              table: tbl(`${sub}.products`, 't1'),
+              leftColumn: col('t0', 'product_id'),
+              rightColumn: col('t1', 'id'),
+            },
+          ],
+          groupBy: [col('t0', 'status')],
+          aggregations: [{ fn: 'sum', column: col('t1', 'price'), alias: 'totalPrice' }],
+        })
+        check(parts, [], cfg.aggOnJoinedColumn)
+      })
+    })
+
+    // ── Cross-table ORDER BY ──────────────────────────────
+
+    describe('cross-table ORDER BY', () => {
+      it('order by joined column (#24)', () => {
+        const parts = base({
+          joins: [
+            {
+              type: 'left',
+              table: tbl(`${sub}.orders`, 't1'),
+              leftColumn: col('t0', 'id'),
+              rightColumn: col('t1', 'user_id'),
+            },
+          ],
+          orderBy: [{ column: col('t1', 'created_at'), direction: 'desc' }],
+        })
+        check(parts, [], cfg.crossTableOrderBy)
+      })
+    })
+
+    // ── Array ops on int[] ────────────────────────────────
+
+    describe('array ops on int[]', () => {
+      it('arrayContains on int[] (#203)', () => {
+        const cond: WhereArrayCondition = {
+          column: col('t0', 'priorities'),
+          operator: 'contains',
+          paramIndexes: [0],
+          elementType: 'int',
+        }
+        check(base({ where: cond }), [1], cfg.arrayContainsInt)
+      })
+
+      it('arrayContainsAll on int[] (#204)', () => {
+        const cond: WhereArrayCondition = {
+          column: col('t0', 'priorities'),
+          operator: 'containsAll',
+          paramIndexes: [0],
+          elementType: 'int',
+        }
+        check(base({ where: cond }), [[1, 2, 3]], cfg.arrayContainsAllInt)
+      })
+
+      it('array filter in AND group (#205)', () => {
+        const cond: WhereGroup = {
+          logic: 'and',
+          conditions: [
+            {
+              column: col('t0', 'tags'),
+              operator: 'containsAny',
+              paramIndexes: [0],
+              elementType: 'string',
+            } as WhereArrayCondition,
+            { column: col('t0', 'price'), operator: '>', paramIndex: 1 } as WhereCondition,
+          ],
+        }
+        check(base({ where: cond }), [['sale'], 10], cfg.arrayInGroup)
+      })
+
+      it('array filter on joined table (#206)', () => {
+        const parts = base({
+          joins: [
+            {
+              type: 'left',
+              table: tbl(`${sub}.products`, 't1'),
+              leftColumn: col('t0', 'product_id'),
+              rightColumn: col('t1', 'id'),
+            },
+          ],
+          where: {
+            column: col('t1', 'labels'),
+            operator: 'containsAny',
+            paramIndexes: [0],
+            elementType: 'string',
+          } as WhereArrayCondition,
+        })
+        check(parts, [['sale']], cfg.arrayOnJoinedTable)
+      })
+
+      it('arrayContainsAll single element (#207)', () => {
+        const cond: WhereArrayCondition = {
+          column: col('t0', 'tags'),
+          operator: 'containsAll',
+          paramIndexes: [0],
+          elementType: 'string',
+        }
+        check(base({ where: cond }), [['sale']], cfg.arrayContainsAllSingleElement)
+      })
+    })
+
+    // ── distinct + groupBy ────────────────────────────────
+
+    describe('distinct + groupBy', () => {
+      it('distinct with groupBy (#163)', () => {
+        const parts = base({
+          select: [col('t0', 'status')],
+          distinct: true,
+          from: tbl(`${sub}.orders`, 't0'),
+          groupBy: [col('t0', 'status')],
+          aggregations: [{ fn: 'sum', column: col('t0', 'total'), alias: 'totalSum' }],
+        })
+        check(parts, [], cfg.distinctGroupBy)
       })
     })
 

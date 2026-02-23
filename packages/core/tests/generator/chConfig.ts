@@ -142,6 +142,110 @@ export const chConfig: DialectTestConfig = {
   catalogTable: { sql: ['FROM `default`.`users` AS `t0`'] },
   catalogJoin: { sql: ['INNER JOIN `default`.`orders` AS `t1` ON `t0`.`id` = `t1`.`user_id`'] },
 
+  // ── HAVING (extended)
+  havingAndGroup: {
+    sql: ['HAVING (`totalSum` > {p1:Int32} AND `cnt` > {p2:Int32})'],
+    params: [100, 5],
+  },
+  havingOrGroup: {
+    sql: ['HAVING (`totalSum` > {p1:Int32} OR `avgTotal` > {p2:Int32})'],
+    params: [1000, 200],
+  },
+  havingNotGroup: {
+    sql: ['HAVING NOT (`totalSum` > {p1:Int32} OR `cnt` > {p2:Int32})'],
+    params: [100, 5],
+  },
+  havingIsNull: {
+    sql: ['HAVING `discountSum` IS NULL'],
+    params: [],
+  },
+
+  // ── Complex WHERE
+  existsInsideOrGroup: {
+    sql: [
+      '(`t0`.`status` = {p1:String} OR EXISTS (SELECT 1 FROM `default`.`orders` AS `s0` WHERE `t0`.`id` = `s0`.`user_id`))',
+    ],
+    params: ['active'],
+  },
+  deeplyNestedWhere: {
+    sql: [
+      '(`t0`.`status` = {p1:String} OR (`t0`.`age` > {p2:Int32} AND (`t0`.`name` = {p3:String} OR `t0`.`name` = {p4:String})))',
+    ],
+    params: ['active', 18, 'Alice', 'Bob'],
+  },
+  mixedFilterGroupExists: {
+    sql: [
+      '(`t0`.`status` = {p1:String} AND (`t0`.`age` > {p2:Int32} OR `t0`.`age` < {p3:Int32}) AND EXISTS (SELECT 1 FROM `default`.`orders` AS `s0` WHERE `t0`.`id` = `s0`.`user_id`))',
+    ],
+    params: ['active', 65, 18],
+  },
+  countedWithSubFilters: {
+    sql: [
+      '(SELECT COUNT(*) FROM `default`.`orders` AS `s0` WHERE `t0`.`id` = `s0`.`user_id` AND `s0`.`status` = {p1:String}) = {p2:UInt64}',
+    ],
+    params: ['paid', 2],
+  },
+
+  // ── Nested EXISTS
+  nestedExists: {
+    sql: [
+      'EXISTS (SELECT 1 FROM `default`.`invoices` AS `s0` WHERE `t0`.`id` = `s0`.`order_id` AND EXISTS (SELECT 1 FROM `default`.`tenants` AS `s1` WHERE `s0`.`tenant_id` = `s1`.`id`))',
+    ],
+    params: [],
+  },
+
+  // ── Join-related
+  filterOnJoinedColumn: {
+    sql: ['`t1`.`category` = {p1:String}'],
+    params: ['electronics'],
+  },
+  threeTableJoin: {
+    sql: ['LEFT JOIN `default`.`orders` AS `t1`', 'INNER JOIN `default`.`products` AS `t2`'],
+    params: [],
+  },
+  multiJoinPerTableFilters: {
+    sql: ['(`t1`.`active` = {p1:Bool} AND `t2`.`name` = {p2:String})'],
+    params: [true, 'electronics'],
+  },
+  aggOnJoinedColumn: {
+    sql: ['SUM(`t1`.`price`) AS `totalPrice`'],
+    params: [],
+  },
+
+  // ── Cross-table ORDER BY
+  crossTableOrderBy: {
+    sql: ['ORDER BY `t1`.`created_at` DESC'],
+    params: [],
+  },
+
+  // ── Array ops on int[]
+  arrayContainsInt: {
+    sql: ['has(`t0`.`priorities`, {p1:Int32})'],
+    params: [1],
+  },
+  arrayContainsAllInt: {
+    sql: ['hasAll(`t0`.`priorities`, [{p1:Int32}, {p2:Int32}, {p3:Int32}])'],
+    params: [1, 2, 3],
+  },
+  arrayInGroup: {
+    sql: ['(hasAny(`t0`.`tags`, [{p1:String}]) AND `t0`.`price` > {p2:Int32})'],
+    params: ['sale', 10],
+  },
+  arrayOnJoinedTable: {
+    sql: ['hasAny(`t1`.`labels`, [{p1:String}])'],
+    params: ['sale'],
+  },
+  arrayContainsAllSingleElement: {
+    sql: ['hasAll(`t0`.`tags`, [{p1:String}])'],
+    params: ['sale'],
+  },
+
+  // ── distinct + groupBy
+  distinctGroupBy: {
+    sql: ['SELECT DISTINCT', 'GROUP BY `t0`.`status`', 'SUM(`t0`.`total`) AS `totalSum`'],
+    params: [],
+  },
+
   // ── Full query
   fullQuery: {
     sql: [

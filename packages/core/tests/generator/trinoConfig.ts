@@ -146,6 +146,106 @@ export const trinoConfig: DialectTestConfig = {
   catalogTable: { sql: ['FROM "pg_main"."public"."users" AS "t0"'] },
   catalogJoin: { sql: ['INNER JOIN "pg_main"."public"."orders" AS "t1"'] },
 
+  // ── HAVING (extended)
+  havingAndGroup: {
+    sql: ['HAVING ("totalSum" > ? AND "cnt" > ?)'],
+    params: [100, 5],
+  },
+  havingOrGroup: {
+    sql: ['HAVING ("totalSum" > ? OR "avgTotal" > ?)'],
+    params: [1000, 200],
+  },
+  havingNotGroup: {
+    sql: ['HAVING NOT ("totalSum" > ? OR "cnt" > ?)'],
+    params: [100, 5],
+  },
+  havingIsNull: {
+    sql: ['HAVING "discountSum" IS NULL'],
+    params: [],
+  },
+
+  // ── Complex WHERE
+  existsInsideOrGroup: {
+    sql: ['("t0"."status" = ? OR EXISTS (SELECT 1 FROM "public"."orders" AS "s0" WHERE "t0"."id" = "s0"."user_id"))'],
+    params: ['active'],
+  },
+  deeplyNestedWhere: {
+    sql: ['("t0"."status" = ? OR ("t0"."age" > ? AND ("t0"."name" = ? OR "t0"."name" = ?)))'],
+    params: ['active', 18, 'Alice', 'Bob'],
+  },
+  mixedFilterGroupExists: {
+    sql: [
+      '("t0"."status" = ? AND ("t0"."age" > ? OR "t0"."age" < ?) AND EXISTS (SELECT 1 FROM "public"."orders" AS "s0" WHERE "t0"."id" = "s0"."user_id"))',
+    ],
+    params: ['active', 65, 18],
+  },
+  countedWithSubFilters: {
+    sql: [
+      '(SELECT COUNT(*) FROM "public"."orders" AS "s0" WHERE "t0"."id" = "s0"."user_id" AND "s0"."status" = ?) = ?',
+    ],
+    params: ['paid', 2],
+  },
+
+  // ── Nested EXISTS
+  nestedExists: {
+    sql: [
+      'EXISTS (SELECT 1 FROM "public"."invoices" AS "s0" WHERE "t0"."id" = "s0"."order_id" AND EXISTS (SELECT 1 FROM "public"."tenants" AS "s1" WHERE "s0"."tenant_id" = "s1"."id"))',
+    ],
+    params: [],
+  },
+
+  // ── Join-related
+  filterOnJoinedColumn: {
+    sql: ['"t1"."category" = ?'],
+    params: ['electronics'],
+  },
+  threeTableJoin: {
+    sql: ['LEFT JOIN "public"."orders" AS "t1"', 'INNER JOIN "public"."products" AS "t2"'],
+    params: [],
+  },
+  multiJoinPerTableFilters: {
+    sql: ['("t1"."active" = ? AND "t2"."name" = ?)'],
+    params: [true, 'electronics'],
+  },
+  aggOnJoinedColumn: {
+    sql: ['SUM("t1"."price") AS "totalPrice"'],
+    params: [],
+  },
+
+  // ── Cross-table ORDER BY
+  crossTableOrderBy: {
+    sql: ['ORDER BY "t1"."created_at" DESC'],
+    params: [],
+  },
+
+  // ── Array ops on int[]
+  arrayContainsInt: {
+    sql: ['contains("t0"."priorities", ?)'],
+    params: [1],
+  },
+  arrayContainsAllInt: {
+    sql: ['cardinality(array_except(ARRAY[?, ?, ?], "t0"."priorities")) = 0'],
+    params: [1, 2, 3],
+  },
+  arrayInGroup: {
+    sql: ['(arrays_overlap("t0"."tags", ARRAY[?]) AND "t0"."price" > ?)'],
+    params: ['sale', 10],
+  },
+  arrayOnJoinedTable: {
+    sql: ['arrays_overlap("t1"."labels", ARRAY[?])'],
+    params: ['sale'],
+  },
+  arrayContainsAllSingleElement: {
+    sql: ['cardinality(array_except(ARRAY[?], "t0"."tags")) = 0'],
+    params: ['sale'],
+  },
+
+  // ── distinct + groupBy
+  distinctGroupBy: {
+    sql: ['SELECT DISTINCT', 'GROUP BY "t0"."status"', 'SUM("t0"."total") AS "totalSum"'],
+    params: [],
+  },
+
   // ── Full query
   fullQuery: {
     sql: [
