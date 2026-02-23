@@ -764,6 +764,7 @@ function toExecError(
   dialect: DialectName,
   gen: { sql: string; params: unknown[] },
 ): ExecutionError {
+  if (err instanceof ExecutionError) return err
   const cause = err instanceof Error ? err : new Error(String(err))
   if (isTimeout(cause)) {
     return new ExecutionError({

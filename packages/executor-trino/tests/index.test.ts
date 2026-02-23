@@ -1,4 +1,4 @@
-import { ExecutionError } from '@mkven/multi-db-query'
+import { ConnectionError, ExecutionError } from '@mkven/multi-db-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTrinoExecutor } from '../src/index.js'
 
@@ -35,23 +35,43 @@ describe('executor-trino', () => {
   // ── S1: escapeTrinoValue — unsupported types ──────────────
 
   describe('escapeTrinoValue rejects unsupported types', () => {
-    it('throws on object param', async () => {
+    it('throws ExecutionError on object param', async () => {
       vi.mocked(fetch).mockResolvedValue(trinoOk([], ['id']))
-      await expect(executor.execute('SELECT ?', [{}])).rejects.toThrow('Unsupported Trino parameter type: object')
+      try {
+        await executor.execute('SELECT ?', [{}])
+        expect.fail('Expected ExecutionError')
+      } catch (err) {
+        expect(err).toBeInstanceOf(ExecutionError)
+        const e = err as ExecutionError
+        expect(e.code).toBe('QUERY_FAILED')
+        expect((e.cause as Error)?.message).toContain('Unsupported Trino parameter type: object')
+      }
     })
 
-    it('throws on function param', async () => {
+    it('throws ExecutionError on function param', async () => {
       vi.mocked(fetch).mockResolvedValue(trinoOk([], ['id']))
-      await expect(executor.execute('SELECT ?', [() => {}])).rejects.toThrow(
-        'Unsupported Trino parameter type: function',
-      )
+      try {
+        await executor.execute('SELECT ?', [() => {}])
+        expect.fail('Expected ExecutionError')
+      } catch (err) {
+        expect(err).toBeInstanceOf(ExecutionError)
+        const e = err as ExecutionError
+        expect(e.code).toBe('QUERY_FAILED')
+        expect((e.cause as Error)?.message).toContain('Unsupported Trino parameter type: function')
+      }
     })
 
-    it('throws on symbol param', async () => {
+    it('throws ExecutionError on symbol param', async () => {
       vi.mocked(fetch).mockResolvedValue(trinoOk([], ['id']))
-      await expect(executor.execute('SELECT ?', [Symbol('x')])).rejects.toThrow(
-        'Unsupported Trino parameter type: symbol',
-      )
+      try {
+        await executor.execute('SELECT ?', [Symbol('x')])
+        expect.fail('Expected ExecutionError')
+      } catch (err) {
+        expect(err).toBeInstanceOf(ExecutionError)
+        const e = err as ExecutionError
+        expect(e.code).toBe('QUERY_FAILED')
+        expect((e.cause as Error)?.message).toContain('Unsupported Trino parameter type: symbol')
+      }
     })
   })
 
@@ -120,6 +140,36 @@ describe('executor-trino', () => {
       expect(body).toContain('42')
       expect(body).toContain('TRUE')
       expect(body).toContain("'O''Brien'")
+    })
+  })
+
+  // ── Network errors ────────────────────────────────────────
+
+  describe('network error wrapping', () => {
+    it('execute() wraps network error in ExecutionError', async () => {
+      vi.mocked(fetch).mockRejectedValue(new TypeError('fetch failed'))
+
+      try {
+        await executor.execute('SELECT 1', [])
+        expect.fail('Expected ExecutionError')
+      } catch (err) {
+        expect(err).toBeInstanceOf(ExecutionError)
+        const e = err as ExecutionError
+        expect(e.code).toBe('QUERY_FAILED')
+      }
+    })
+
+    it('ping() wraps network error in ConnectionError', async () => {
+      vi.mocked(fetch).mockRejectedValue(new TypeError('fetch failed'))
+
+      try {
+        await executor.ping()
+        expect.fail('Expected ConnectionError')
+      } catch (err) {
+        expect(err).toBeInstanceOf(ConnectionError)
+        const e = err as ConnectionError
+        expect(e.code).toBe('CONNECTION_FAILED')
+      }
     })
   })
 })

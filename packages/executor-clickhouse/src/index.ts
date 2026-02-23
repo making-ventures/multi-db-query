@@ -1,6 +1,6 @@
 import { createClient } from '@clickhouse/client'
 import type { DbExecutor } from '@mkven/multi-db-query'
-import { ConnectionError } from '@mkven/multi-db-query'
+import { ConnectionError, ExecutionError } from '@mkven/multi-db-query'
 
 export interface ClickHouseExecutorConfig {
   readonly url?: string | undefined
@@ -26,23 +26,38 @@ export function createClickHouseExecutor(config: ClickHouseExecutorConfig): DbEx
 
   return {
     async execute(sql: string, params: unknown[]): Promise<Record<string, unknown>[]> {
-      const queryParams: Record<string, unknown> = {}
-      for (let i = 0; i < params.length; i++) {
-        queryParams[`p${String(i + 1)}`] = params[i]
+      try {
+        const queryParams: Record<string, unknown> = {}
+        for (let i = 0; i < params.length; i++) {
+          queryParams[`p${String(i + 1)}`] = params[i]
+        }
+
+        const result = await client.query({
+          query: sql,
+          query_params: queryParams,
+          format: 'JSONEachRow',
+        })
+
+        return result.json()
+      } catch (err) {
+        const cause = err instanceof Error ? err : new Error(String(err))
+        throw new ExecutionError(
+          { code: 'QUERY_FAILED', database: 'clickhouse', dialect: 'clickhouse', sql, params: [...params], cause },
+          cause,
+        )
       }
-
-      const result = await client.query({
-        query: sql,
-        query_params: queryParams,
-        format: 'JSONEachRow',
-      })
-
-      return result.json()
     },
 
     async ping(): Promise<void> {
-      const result = await client.ping()
-      if (!result.success) {
+      try {
+        const result = await client.ping()
+        if (!result.success) {
+          throw new ConnectionError('CONNECTION_FAILED', 'ClickHouse ping failed', {
+            url: config.url,
+          })
+        }
+      } catch (err) {
+        if (err instanceof ConnectionError) throw err
         throw new ConnectionError('CONNECTION_FAILED', 'ClickHouse ping failed', {
           url: config.url,
         })

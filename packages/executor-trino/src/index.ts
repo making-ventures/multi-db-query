@@ -1,5 +1,5 @@
 import type { DbExecutor } from '@mkven/multi-db-query'
-import { ExecutionError } from '@mkven/multi-db-query'
+import { ConnectionError, ExecutionError } from '@mkven/multi-db-query'
 
 export interface TrinoExecutorConfig {
   readonly server: string
@@ -151,12 +151,26 @@ export function createTrinoExecutor(config: TrinoExecutorConfig): DbExecutor {
 
   return {
     async execute(sql: string, params: unknown[]): Promise<Record<string, unknown>[]> {
-      const finalSql = params.length > 0 ? inlineParams(sql, params) : sql
-      return submitAndCollect(finalSql)
+      try {
+        const finalSql = params.length > 0 ? inlineParams(sql, params) : sql
+        return await submitAndCollect(finalSql)
+      } catch (err) {
+        if (err instanceof ExecutionError) throw err
+        const cause = err instanceof Error ? err : new Error(String(err))
+        throw new ExecutionError(
+          { code: 'QUERY_FAILED', database: 'trino', dialect: 'trino', sql, params: [...params], cause },
+          cause,
+        )
+      }
     },
 
     async ping(): Promise<void> {
-      await submitAndCollect('SELECT 1')
+      try {
+        await submitAndCollect('SELECT 1')
+      } catch (err) {
+        if (err instanceof ExecutionError || err instanceof ConnectionError) throw err
+        throw new ConnectionError('CONNECTION_FAILED', 'Trino ping failed', {})
+      }
     },
 
     async close(): Promise<void> {

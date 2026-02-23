@@ -1,4 +1,5 @@
 import type { DbExecutor } from '@mkven/multi-db-query'
+import { ConnectionError, ExecutionError } from '@mkven/multi-db-query'
 import { Pool, types } from 'pg'
 
 // Parse NUMERIC/DECIMAL and INT8 as JavaScript numbers instead of strings
@@ -32,12 +33,26 @@ export function createPostgresExecutor(config: PostgresExecutorConfig): DbExecut
 
   return {
     async execute(sql: string, params: unknown[]): Promise<Record<string, unknown>[]> {
-      const result = await pool.query(sql, params)
-      return result.rows
+      try {
+        const result = await pool.query(sql, params)
+        return result.rows
+      } catch (err) {
+        const cause = err instanceof Error ? err : new Error(String(err))
+        throw new ExecutionError(
+          { code: 'QUERY_FAILED', database: 'postgres', dialect: 'postgres', sql, params: [...params], cause },
+          cause,
+        )
+      }
     },
 
     async ping(): Promise<void> {
-      await pool.query('SELECT 1')
+      try {
+        await pool.query('SELECT 1')
+      } catch (_err) {
+        throw new ConnectionError('CONNECTION_FAILED', 'PostgreSQL ping failed', {
+          url: config.connectionString,
+        })
+      }
     },
 
     async close(): Promise<void> {

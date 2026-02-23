@@ -4,6 +4,7 @@ import { createMultiDbClient } from '@mkven/multi-db-client'
 import {
   describeEdgeCaseContract,
   describeErrorContract,
+  describeExecutorContract,
   describeHealthLifecycleContract,
   describeInjectionContract,
   describeQueryContract,
@@ -141,3 +142,27 @@ describeValidationContract(
   metadata,
   roles,
 )
+
+// ── Executor contracts (direct DbExecutor interface) ──────────
+
+describeExecutorContract('postgres', () => createPostgresExecutor({ connectionString: PG_URL }), {
+  validQuery: 'SELECT 1 AS n',
+  invalidQuery: 'SELECT * FROM __nonexistent_table_xyz__',
+})
+
+describeExecutorContract(
+  'clickhouse',
+  () =>
+    createClickHouseExecutor({
+      url: CH_URL,
+      username: 'default',
+      password: 'clickhouse',
+      database: 'multidb',
+    }),
+  { validQuery: 'SELECT 1 AS n', invalidQuery: 'SELECT * FROM __nonexistent_table_xyz__' },
+)
+
+describeExecutorContract('trino', () => createTrinoExecutor({ server: TRINO_URL, user: 'trino' }), {
+  validQuery: 'SELECT 1 AS n',
+  invalidQuery: 'SELECT * FROM __nonexistent_catalog__.__bad_schema__.__bad_table__',
+})
