@@ -1,4 +1,5 @@
 import type { DbExecutor } from '@mkven/multi-db-query'
+import { ExecutionError } from '@mkven/multi-db-query'
 
 export interface TrinoExecutorConfig {
   readonly server: string
@@ -36,7 +37,7 @@ function escapeTrinoValue(value: unknown): string {
   if (Array.isArray(value)) {
     return `ARRAY[${value.map((v) => escapeTrinoValue(v)).join(', ')}]`
   }
-  return String(value)
+  throw new Error(`Unsupported Trino parameter type: ${typeof value}`)
 }
 
 function rowToObject(columns: string[], row: unknown[]): Record<string, unknown> {
@@ -89,7 +90,17 @@ export function createTrinoExecutor(config: TrinoExecutorConfig): DbExecutor {
       let body = (await res.json()) as TrinoResponse
 
       if (body.error !== undefined) {
-        throw new Error(`Trino error: ${body.error.message}`)
+        throw new ExecutionError(
+          {
+            code: 'QUERY_FAILED',
+            database: 'trino',
+            dialect: 'trino',
+            sql,
+            params: [],
+            cause: new Error(body.error.message),
+          },
+          new Error(body.error.message),
+        )
       }
 
       const columns: string[] = body.columns?.map((c) => c.name) ?? []
@@ -106,7 +117,17 @@ export function createTrinoExecutor(config: TrinoExecutorConfig): DbExecutor {
         body = (await nextRes.json()) as TrinoResponse
 
         if (body.error !== undefined) {
-          throw new Error(`Trino error: ${body.error.message}`)
+          throw new ExecutionError(
+            {
+              code: 'QUERY_FAILED',
+              database: 'trino',
+              dialect: 'trino',
+              sql,
+              params: [],
+              cause: new Error(body.error.message),
+            },
+            new Error(body.error.message),
+          )
         }
 
         if (body.columns !== undefined && columns.length === 0) {

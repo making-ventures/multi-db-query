@@ -9,6 +9,7 @@ import {
   isFn,
   isGroup,
   safeAggFn,
+  safeWhereFn,
 } from '../generator/fragments.js'
 import type {
   AggregationClause,
@@ -200,7 +201,7 @@ class TrinoGenerator {
 
   // WhereFunction — levenshtein → levenshtein_distance
   private whereFn(c: WhereFunction): string {
-    const fn = c.fn === 'levenshtein' ? 'levenshtein_distance' : c.fn
+    const fn = safeWhereFn(c.fn) === 'levenshtein' ? 'levenshtein_distance' : safeWhereFn(c.fn)
     const col = quoteCol(c.column)
     return `${fn}(${col}, ${this.ref(c.fnParamIndex)}) ${c.operator} ${this.ref(c.compareParamIndex)}`
   }
@@ -356,17 +357,17 @@ class TrinoGenerator {
 // --- Helpers ---
 
 function quoteCol(col: ColumnRef): string {
-  return `"${col.tableAlias}"."${col.columnName}"`
+  return `"${escapeIdentDQ(col.tableAlias)}"."${escapeIdentDQ(col.columnName)}"`
 }
 
 function quoteTable(ref: TableRef): string {
   const segments: string[] = []
   if (ref.catalog !== undefined) {
-    segments.push(`"${ref.catalog}"`)
+    segments.push(`"${escapeIdentDQ(ref.catalog)}"`)
   }
   const parts = ref.physicalName.split('.')
   for (const p of parts) {
-    segments.push(`"${p}"`)
+    segments.push(`"${escapeIdentDQ(p)}"`)
   }
-  return `${segments.join('.')} AS "${ref.alias}"`
+  return `${segments.join('.')} AS "${escapeIdentDQ(ref.alias)}"`
 }

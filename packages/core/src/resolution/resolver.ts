@@ -139,11 +139,25 @@ class ResolutionContext {
 
     const fromAlias = this.tableAliases.get(this.fromTable.id)
     if (fromAlias === undefined) {
-      throw new ExecutionError({ code: 'QUERY_FAILED', database: '', dialect: 'postgres', sql: '', params: [], cause: new Error('From table alias not found') })
+      throw new ExecutionError({
+        code: 'QUERY_FAILED',
+        database: '',
+        dialect: 'postgres',
+        sql: '',
+        params: [],
+        cause: new Error('From table alias not found'),
+      })
     }
     const fromRef = this.tableRefs.get(fromAlias)
     if (fromRef === undefined) {
-      throw new ExecutionError({ code: 'QUERY_FAILED', database: '', dialect: 'postgres', sql: '', params: [], cause: new Error('From table ref not found') })
+      throw new ExecutionError({
+        code: 'QUERY_FAILED',
+        database: '',
+        dialect: 'postgres',
+        sql: '',
+        params: [],
+        cause: new Error('From table ref not found'),
+      })
     }
 
     const parts: SqlParts = {
@@ -188,7 +202,14 @@ class ResolutionContext {
   private getAlias(tableId: string): string {
     const alias = this.tableAliases.get(tableId)
     if (alias === undefined) {
-      throw new ExecutionError({ code: 'QUERY_FAILED', database: '', dialect: 'postgres', sql: '', params: [], cause: new Error(`No alias for table: ${tableId}`) })
+      throw new ExecutionError({
+        code: 'QUERY_FAILED',
+        database: '',
+        dialect: 'postgres',
+        sql: '',
+        params: [],
+        cause: new Error(`No alias for table: ${tableId}`),
+      })
     }
     return alias
   }
@@ -198,7 +219,14 @@ class ResolutionContext {
   private resolveColumnRef(apiName: string, tableId: string): ColumnRef {
     const col = this.index.getColumn(tableId, apiName)
     if (col === undefined) {
-      throw new ExecutionError({ code: 'QUERY_FAILED', database: '', dialect: 'postgres', sql: '', params: [], cause: new Error(`Column not found: ${apiName} in table ${tableId}`) })
+      throw new ExecutionError({
+        code: 'QUERY_FAILED',
+        database: '',
+        dialect: 'postgres',
+        sql: '',
+        params: [],
+        cause: new Error(`Column not found: ${apiName} in table ${tableId}`),
+      })
     }
     return {
       tableAlias: this.getAlias(tableId),
@@ -255,8 +283,9 @@ class ResolutionContext {
         if (joinTable === undefined) continue
 
         if (join.columns === undefined) {
+          const joinAccess = resolveTableAccess(joinTable, this.context, this.rolesById)
           for (const col of joinTable.columns) {
-            const eff = resolveTableAccess(joinTable, this.context, this.rolesById).columns.get(col.apiName)
+            const eff = joinAccess.columns.get(col.apiName)
             if (eff?.allowed) {
               candidates.push({ apiName: col.apiName, tableId: joinTable.id, tableApiName: join.table })
             }

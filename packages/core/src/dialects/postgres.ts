@@ -9,6 +9,7 @@ import {
   isFn,
   isGroup,
   safeAggFn,
+  safeWhereFn,
 } from '../generator/fragments.js'
 import type {
   AggregationClause,
@@ -196,7 +197,7 @@ class PgGenerator {
 
   // WhereFunction
   private whereFn(c: WhereFunction): string {
-    return `${c.fn}(${quoteCol(c.column)}, ${this.ref(c.fnParamIndex)}) ${c.operator} ${this.ref(c.compareParamIndex)}`
+    return `${safeWhereFn(c.fn)}(${quoteCol(c.column)}, ${this.ref(c.fnParamIndex)}) ${c.operator} ${this.ref(c.compareParamIndex)}`
   }
 
   // WhereArrayCondition
@@ -338,13 +339,13 @@ class PgGenerator {
 // --- Helpers ---
 
 function quoteCol(col: ColumnRef): string {
-  return `"${col.tableAlias}"."${col.columnName}"`
+  return `"${escapeIdentDQ(col.tableAlias)}"."${escapeIdentDQ(col.columnName)}"`
 }
 
 function quoteTable(ref: TableRef): string {
   const parts = ref.physicalName.split('.')
-  const quoted = parts.map((p) => `"${p}"`).join('.')
-  return `${quoted} AS "${ref.alias}"`
+  const quoted = parts.map((p) => `"${escapeIdentDQ(p)}"`).join('.')
+  return `${quoted} AS "${escapeIdentDQ(ref.alias)}"`
 }
 
 function pgCast(elementType: string | undefined): string {

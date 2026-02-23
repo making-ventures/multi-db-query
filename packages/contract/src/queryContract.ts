@@ -65,6 +65,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C002: data result includes correct meta.columns', async () => {
         const r = await engine.query({ definition: { from: 'orders', columns: ['id', 'status'] }, context: admin })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           expect(r.meta.columns).toHaveLength(2)
           for (const c of r.meta.columns) {
@@ -79,6 +80,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C003: data result includes meta.timing', async () => {
         const r = await engine.query({ definition: { from: 'orders', columns: ['id', 'status'] }, context: admin })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           expect(r.meta.timing.planningMs).toBeGreaterThanOrEqual(0)
           expect(r.meta.timing.generationMs).toBeGreaterThanOrEqual(0)
@@ -88,6 +90,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C004: data result includes meta.strategy', async () => {
         const r = await engine.query({ definition: { from: 'orders', columns: ['id', 'status'] }, context: admin })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           expect(['direct', 'cache', 'materialized', 'trino-cross-db']).toContain(r.meta.strategy)
         }
@@ -95,6 +98,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C005: data result includes meta.tablesUsed', async () => {
         const r = await engine.query({ definition: { from: 'orders', columns: ['id', 'status'] }, context: admin })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           expect(r.meta.tablesUsed.length).toBeGreaterThanOrEqual(1)
           for (const t of r.meta.tablesUsed) {
@@ -108,6 +112,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C006: omitting columns returns all allowed', async () => {
         const r = await engine.query({ definition: { from: 'orders' }, context: admin })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           expect(r.meta.columns.length).toBe(11) // orders has 11 columns
         }
@@ -147,6 +152,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders', columns: ['id'], executeMode: 'sql-only' },
           context: admin,
         })
+        expect(r.kind).toBe('sql')
         if (r.kind === 'sql') {
           expect(r.meta.columns).toHaveLength(1)
           expect(r.meta.columns[0]?.apiName).toBe('id')
@@ -158,6 +164,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders', columns: ['id'], executeMode: 'sql-only' },
           context: admin,
         })
+        expect(r.kind).toBe('sql')
         if (r.kind === 'sql') {
           expect(r.meta.timing.executionMs).toBeUndefined()
           expect(r.meta.timing.planningMs).toBeGreaterThanOrEqual(0)
@@ -175,6 +182,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           },
           context: admin,
         })
+        expect(r.kind).toBe('sql')
         if (r.kind === 'sql') {
           expect(r.params.length).toBeGreaterThanOrEqual(1)
         }
@@ -185,6 +193,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders', columns: ['id', 'total'], executeMode: 'sql-only' },
           context: tenantUser,
         })
+        expect(r.kind).toBe('sql')
         if (r.kind === 'sql') {
           const totalCol = r.meta.columns.find((c) => c.apiName === 'total')
           expect(totalCol?.masked).toBe(true)
@@ -218,6 +227,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C021: count mode has empty meta.columns', async () => {
         const r = await engine.query({ definition: { from: 'orders', executeMode: 'count' }, context: admin })
+        expect(r.kind).toBe('count')
         if (r.kind === 'count') {
           expect(r.meta.columns).toEqual([])
         }
@@ -358,6 +368,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
     describe('10.1 Role-Based Permissions', () => {
       it('C700: admin sees all columns', async () => {
         const r = await engine.query({ definition: { from: 'orders' }, context: admin })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           expect(r.meta.columns.length).toBe(11)
         }
@@ -368,6 +379,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders', columns: ['id', 'total', 'status'] },
           context: tenantUser,
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           expect(r.meta.columns.length).toBe(3)
         }
@@ -375,6 +387,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C702: omitting columns uses role-allowed set', async () => {
         const r = await engine.query({ definition: { from: 'orders' }, context: tenantUser })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const names = r.meta.columns.map((c) => c.apiName).sort()
           expect(names).toEqual(['createdAt', 'id', 'status', 'total'])
@@ -420,6 +433,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders' },
           context: { roles: { user: ['tenant-user', 'admin'] } },
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           expect(r.meta.columns.length).toBe(11)
         }
@@ -430,6 +444,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders' },
           context: { roles: { user: ['tenant-user', 'viewer'] } },
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const names = r.meta.columns.map((c) => c.apiName).sort()
           expect(names).toEqual(['createdAt', 'id', 'quantity', 'status', 'total'])
@@ -445,6 +460,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders', joins: [{ table: 'users' }] },
           context: { roles: { user: ['admin'], service: ['orders-service'] } },
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const userCols = r.meta.columns
             .filter((c) => c.fromTable === 'users')
@@ -466,6 +482,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C722: omitted scope = no restriction', async () => {
         const r = await engine.query({ definition: { from: 'orders' }, context: { roles: { user: ['admin'] } } })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           expect(r.meta.columns.length).toBe(11)
         }
@@ -507,6 +524,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
     describe('11. Column Masking', () => {
       it('C800: masked column reported in meta', async () => {
         const r = await engine.query({ definition: { from: 'orders', columns: ['id', 'total'] }, context: tenantUser })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const totalCol = r.meta.columns.find((c) => c.apiName === 'total')
           expect(totalCol?.masked).toBe(true)
@@ -517,6 +535,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C801: admin sees unmasked', async () => {
         const r = await engine.query({ definition: { from: 'orders', columns: ['id', 'total'] }, context: admin })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const totalCol = r.meta.columns.find((c) => c.apiName === 'total')
           expect(totalCol?.masked).toBe(false)
@@ -525,6 +544,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C802: masked value is obfuscated (number)', async () => {
         const r = await engine.query({ definition: { from: 'orders', columns: ['total'] }, context: tenantUser })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           for (const row of r.data) {
             expect((row as Record<string, unknown>).total).toBe(0)
@@ -537,6 +557,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders', columns: ['id', 'internalNote'] },
           context: analyst,
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           for (const row of r.data) {
             const note = (row as Record<string, unknown>).internalNote
@@ -549,6 +570,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C804: masking on email column', async () => {
         const r = await engine.query({ definition: { from: 'users', columns: ['email'] }, context: tenantUser })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           for (const row of r.data) {
             const email = (row as Record<string, unknown>).email as string
@@ -567,6 +589,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           },
           context: tenantUser,
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const agg = r.meta.columns.find((c) => c.apiName === 'totalSum')
           expect(agg?.masked).toBe(false)
@@ -578,6 +601,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders', columns: ['id', 'total'], executeMode: 'sql-only' },
           context: tenantUser,
         })
+        expect(r.kind).toBe('sql')
         if (r.kind === 'sql') {
           const totalCol = r.meta.columns.find((c) => c.apiName === 'total')
           expect(totalCol?.masked).toBe(true)
@@ -589,6 +613,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders', columns: ['id', 'total'] },
           context: { roles: { user: ['tenant-user', 'admin'] } },
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const totalCol = r.meta.columns.find((c) => c.apiName === 'total')
           expect(totalCol?.masked).toBe(false)
@@ -600,6 +625,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders', columns: ['id', 'total'] },
           context: { roles: { user: ['admin'], service: ['reporting-service'] } },
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const totalCol = r.meta.columns.find((c) => c.apiName === 'total')
           expect(totalCol?.masked).toBe(true)
@@ -608,6 +634,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C809: masked value (phone)', async () => {
         const r = await engine.query({ definition: { from: 'users', columns: ['id', 'phone'] }, context: analyst })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           for (const row of r.data) {
             const phone = (row as Record<string, unknown>).phone
@@ -624,6 +651,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'users', columns: ['id', 'firstName', 'lastName'] },
           context: analyst,
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           for (const row of r.data) {
             const fn = (row as Record<string, unknown>).firstName as string
@@ -635,6 +663,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C811: masked value (number on price)', async () => {
         const r = await engine.query({ definition: { from: 'products', columns: ['id', 'price'] }, context: analyst })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           for (const row of r.data) {
             expect((row as Record<string, unknown>).price).toBe(0)
@@ -644,6 +673,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C812: masked value (number on amount)', async () => {
         const r = await engine.query({ definition: { from: 'invoices', columns: ['id', 'amount'] }, context: analyst })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           for (const row of r.data) {
             expect((row as Record<string, unknown>).amount).toBe(0)
@@ -656,6 +686,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'users', columns: ['id', 'email', 'phone', 'firstName'] },
           context: analyst,
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const emailCol = r.meta.columns.find((c) => c.apiName === 'email')
           const phoneCol = r.meta.columns.find((c) => c.apiName === 'phone')
@@ -668,6 +699,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C814: masked value (date)', async () => {
         const r = await engine.query({ definition: { from: 'orders', columns: ['id', 'createdAt'] }, context: analyst })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           for (const row of r.data) {
             const ca = (row as Record<string, unknown>).createdAt as string
@@ -681,6 +713,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders', columns: ['id', 'internalNote'] },
           context: analyst,
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const nullRows = r.data.filter((row) => {
             const id = (row as Record<string, unknown>).id
@@ -697,6 +730,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders', columns: ['id', 'customerId'] },
           context: analyst,
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           for (const row of r.data) {
             const cid = (row as Record<string, unknown>).customerId as string
@@ -1580,6 +1614,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders', columns: ['id', 'total', 'status'] },
           context: admin,
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const idCol = r.meta.columns.find((c) => c.apiName === 'id')
           expect(idCol?.type).toBe('int')
@@ -1592,6 +1627,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C1101: meta.columns nullable correctness', async () => {
         const r = await engine.query({ definition: { from: 'orders', columns: ['id', 'productId'] }, context: admin })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const idCol = r.meta.columns.find((c) => c.apiName === 'id')
           expect(idCol?.nullable).toBe(false)
@@ -1605,6 +1641,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders', joins: [{ table: 'products' }], columns: ['id', 'status'] },
           context: admin,
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const ordersCols = r.meta.columns.filter((c) => c.fromTable === 'orders')
           expect(ordersCols.length).toBeGreaterThan(0)
@@ -1625,6 +1662,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           },
           context: admin,
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const sumCol = r.meta.columns.find((c) => c.apiName === 'totalSum')
           expect(sumCol?.type).toBe('decimal')
@@ -1644,6 +1682,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           },
           context: admin,
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const col = r.meta.columns.find((c) => c.apiName === 'avgQty')
           expect(col?.type).toBe('decimal')
@@ -1652,6 +1691,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C1105: meta.tablesUsed for single table', async () => {
         const r = await engine.query({ definition: { from: 'orders' }, context: admin })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           expect(r.meta.tablesUsed).toHaveLength(1)
           expect(r.meta.tablesUsed[0]?.tableId).toBe('orders')
@@ -1665,6 +1705,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           definition: { from: 'orders', joins: [{ table: 'products' }] },
           context: admin,
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           expect(r.meta.tablesUsed).toHaveLength(2)
         }
@@ -1672,6 +1713,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C1107: meta.columns for count mode', async () => {
         const r = await engine.query({ definition: { from: 'orders', executeMode: 'count' }, context: admin })
+        expect(r.kind).toBe('count')
         if (r.kind === 'count') {
           expect(r.meta.columns).toEqual([])
         }
@@ -1679,6 +1721,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C1108: meta.dialect present (data mode)', async () => {
         const r = await engine.query({ definition: { from: 'orders' }, context: admin })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           expect(['postgres', 'clickhouse', 'trino']).toContain(r.meta.dialect)
         }
@@ -1686,6 +1729,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C1109: meta.targetDatabase for direct query', async () => {
         const r = await engine.query({ definition: { from: 'orders' }, context: admin })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           expect(r.meta.targetDatabase).toBe('pg-main')
         }
@@ -1710,6 +1754,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C1111: meta.dialect in sql-only mode', async () => {
         const r = await engine.query({ definition: { from: 'orders', executeMode: 'sql-only' }, context: admin })
+        expect(r.kind).toBe('sql')
         if (r.kind === 'sql') {
           expect(['postgres', 'clickhouse', 'trino']).toContain(r.meta.dialect)
         }
@@ -1717,6 +1762,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
       it('C1112: meta.dialect in count mode', async () => {
         const r = await engine.query({ definition: { from: 'orders', executeMode: 'count' }, context: admin })
+        expect(r.kind).toBe('count')
         if (r.kind === 'count') {
           expect(['postgres', 'clickhouse', 'trino']).toContain(r.meta.dialect)
         }
@@ -1731,6 +1777,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           },
           context: admin,
         })
+        expect(r.kind).toBe('data')
         if (r.kind === 'data') {
           const col = r.meta.columns.find((c) => c.apiName === 'discountSum')
           expect(col?.nullable).toBe(true)
@@ -1755,6 +1802,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'status', operator: '=', value: 'active' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2)
         })
 
@@ -1763,6 +1811,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'status', operator: '!=', value: 'cancelled' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(4)
         })
 
@@ -1771,6 +1820,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'amount', operator: '>', value: 100 }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -1779,6 +1829,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'amount', operator: '<', value: 200 }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -1787,6 +1838,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'amount', operator: '>=', value: 150 }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -1795,6 +1847,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'amount', operator: '<=', value: 100 }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2)
         })
 
@@ -1803,6 +1856,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'isActive', operator: '=', value: true }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -1811,6 +1865,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'isActive', operator: '!=', value: true }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(1) // only false (SQL != excludes NULL)
         })
 
@@ -1822,6 +1877,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(1)
         })
       })
@@ -1834,6 +1890,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'email', operator: 'like', value: '%@test%' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(5)
         })
 
@@ -1842,6 +1899,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'email', operator: 'notLike', value: '%alpha%' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(4)
         })
 
@@ -1850,6 +1908,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'email', operator: 'ilike', value: '%TEST%' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(5)
         })
 
@@ -1858,6 +1917,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'email', operator: 'notIlike', value: '%ALPHA%' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(4)
         })
 
@@ -1866,6 +1926,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'email', operator: 'contains', value: 'alpha' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(1)
         })
 
@@ -1874,6 +1935,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'email', operator: 'icontains', value: 'ALPHA' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(1)
         })
 
@@ -1882,6 +1944,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'email', operator: 'notContains', value: 'alpha' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(4)
         })
 
@@ -1890,6 +1953,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'email', operator: 'notIcontains', value: 'ALPHA' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(4)
         })
 
@@ -1898,6 +1962,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'name', operator: 'startsWith', value: 'Al' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(1)
         })
 
@@ -1906,6 +1971,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'name', operator: 'istartsWith', value: 'AL' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(1)
         })
 
@@ -1914,6 +1980,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'email', operator: 'endsWith', value: '@test.com' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(5)
         })
 
@@ -1922,6 +1989,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'email', operator: 'iendsWith', value: '@TEST.COM' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(5)
         })
 
@@ -1930,6 +1998,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'name', operator: 'contains', value: 'Al%ha' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(0)
         })
 
@@ -1938,6 +2007,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'name', operator: 'contains', value: 'Al_ha' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(0)
         })
       })
@@ -1953,6 +2023,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -1964,6 +2035,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2)
         })
 
@@ -1972,6 +2044,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'id', operator: 'between', value: { from: 2, to: 4 } }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -1989,6 +2062,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -2000,6 +2074,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -2011,6 +2086,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2)
         })
       })
@@ -2023,6 +2099,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'status', operator: 'in', value: ['active', 'paid'] }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -2031,6 +2108,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'status', operator: 'notIn', value: ['cancelled'] }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(4)
         })
 
@@ -2039,6 +2117,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'id', operator: 'in', value: [1, 3, 5] }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -2056,6 +2135,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2)
         })
 
@@ -2064,6 +2144,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'amount', operator: 'in', value: [100.0, 200.0] }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2)
         })
       })
@@ -2076,6 +2157,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'discount', operator: 'isNull', value: null }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2)
         })
 
@@ -2084,6 +2166,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'discount', operator: 'isNotNull', value: null }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -2092,6 +2175,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'tags', operator: 'isNull', value: null }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             // PG arrays can be NULL (Delta); CH arrays are never NULL (empty instead)
             expect(r.data.length).toBe(variant === 'pg' ? 1 : 0)
@@ -2103,6 +2187,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'tags', operator: 'isNotNull', value: null }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             // PG: 4 non-null; CH: 5 (arrays are never NULL)
             expect(r.data.length).toBe(variant === 'pg' ? 4 : 5)
@@ -2121,6 +2206,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(1)
         })
       })
@@ -2133,6 +2219,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'scores', operator: 'arrayContains', value: 1 }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2)
         })
 
@@ -2144,6 +2231,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2)
         })
 
@@ -2155,6 +2243,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -2163,6 +2252,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'scores', operator: 'arrayIsEmpty', value: null }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             // PG: 1 (Delta has empty array; Gamma has NULL which is not empty)
             // CH: 2 (both Gamma and Delta have empty arrays — CH converts NULL to [])
@@ -2175,6 +2265,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'scores', operator: 'arrayIsNotEmpty', value: null }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -2183,6 +2274,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'tags', operator: 'arrayContainsAll', value: ['fast'] }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -2191,6 +2283,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'tags', operator: 'arrayContains', value: 'fast' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
       })
@@ -2203,6 +2296,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ column: 'amount', operator: '>', refColumn: 'discount' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -2217,6 +2311,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBeGreaterThan(0)
         })
       })
@@ -2240,6 +2335,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
 
@@ -2259,6 +2355,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(1)
         })
 
@@ -2272,6 +2369,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(4)
         })
 
@@ -2297,6 +2395,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(4)
         })
 
@@ -2328,6 +2427,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3)
         })
       })
@@ -2344,6 +2444,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect(r.data.length).toBeGreaterThan(0)
           }
@@ -2357,6 +2458,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2)
         })
       })
@@ -2369,6 +2471,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, joins: [{ table: sampleItems }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect(r.data.length).toBeGreaterThan(0)
             // Sample 4 has no items — should have null sampleItem keys
@@ -2380,6 +2483,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, joins: [{ table: sampleItems, type: 'inner' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             // No sample 4 (has no items)
             const ids = r.data.map(
@@ -2394,6 +2498,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, joins: [{ table: sampleItems }, { table: sampleDetails }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect(r.meta.tablesUsed.length).toBe(3)
           }
@@ -2404,6 +2509,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, joins: [{ table: sampleItems, columns: ['label'] }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             const itemCols = r.meta.columns.filter((c) => c.fromTable === sampleItems)
             expect(itemCols.length).toBe(1)
@@ -2422,6 +2528,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             const itemCols = r.meta.columns.filter((c) => c.fromTable === sampleItems)
             expect(itemCols.length).toBe(0)
@@ -2436,6 +2543,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect(r.data.length).toBeGreaterThan(0)
           }
@@ -2446,6 +2554,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, joins: [{ table: sampleItems }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             // Both have id, category, amount, status — should be qualified
             const colNames = r.meta.columns.map((c) => c.apiName)
@@ -2484,6 +2593,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, columns: [], aggregations: [{ column: '*', fn: 'count', alias: 'total' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect(r.data.length).toBe(1)
             expect((r.data[0] as Record<string, unknown>).total).toBeGreaterThanOrEqual(5)
@@ -2500,6 +2610,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect(r.data.length).toBeGreaterThanOrEqual(1)
           }
@@ -2514,6 +2625,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect(typeof (r.data[0] as Record<string, unknown>).avgAmt).toBe('number')
           }
@@ -2528,6 +2640,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect((r.data[0] as Record<string, unknown>).earliest).toBeDefined()
           }
@@ -2542,6 +2655,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect((r.data[0] as Record<string, unknown>).maxAmt).toBe(300)
           }
@@ -2556,6 +2670,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect((r.data[0] as Record<string, unknown>).discountCount).toBe(3)
           }
@@ -2574,6 +2689,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             for (const row of r.data) {
               expect(row).toHaveProperty('totalAmt')
@@ -2592,6 +2708,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect((r.data[0] as Record<string, unknown>).totalItemAmt).toBeDefined()
           }
@@ -2606,6 +2723,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect(r.meta.columns.length).toBe(1)
             expect(r.meta.columns[0]?.apiName).toBe('totalAmt')
@@ -2621,6 +2739,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             const names = r.meta.columns.map((c) => c.apiName)
             expect(names).toContain('status')
@@ -2637,6 +2756,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect((r.data[0] as Record<string, unknown>).discountSum).toBe(15)
           }
@@ -2656,6 +2776,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(4) // active, paid, cancelled, shipped
         })
 
@@ -2669,6 +2790,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBeGreaterThan(4)
         })
 
@@ -2683,6 +2805,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3) // active(400), paid(200), shipped(150)
         })
 
@@ -2697,6 +2820,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2) // paid(200), shipped(150)
         })
 
@@ -2722,6 +2846,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2) // active(SUM 400>250), paid(AVG 200>150)
         })
 
@@ -2736,6 +2861,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2) // active(400), cancelled(50)
         })
 
@@ -2750,6 +2876,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(1) // paid (all discounts null → SUM is null)
         })
 
@@ -2776,6 +2903,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(1) // cancelled (SUM 50, COUNT 1)
         })
 
@@ -2790,6 +2918,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data' && r.data.length >= 2) {
             const first = (r.data[0] as Record<string, unknown>).totalAmt as number
             const last = (r.data[r.data.length - 1] as Record<string, unknown>).totalAmt as number
@@ -2808,6 +2937,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBeGreaterThanOrEqual(1)
         })
       })
@@ -2820,6 +2950,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, orderBy: [{ column: 'amount', direction: 'asc' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data' && r.data.length >= 2) {
             const amounts = r.data.map((row) => (row as Record<string, unknown>).amount as number)
             for (let i = 1; i < amounts.length; i++) {
@@ -2837,6 +2968,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, orderBy: [{ column: 'amount', direction: 'desc' }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data' && r.data.length >= 2) {
             const amounts = r.data.map((row) => (row as Record<string, unknown>).amount as number)
             for (let i = 1; i < amounts.length; i++) {
@@ -2860,6 +2992,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect(r.data.length).toBe(5)
             const rows = r.data as Record<string, unknown>[]
@@ -2887,16 +3020,19 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBeGreaterThan(0)
         })
 
         it('C404: LIMIT', async () => {
           const r = await engine.query({ definition: { from: samples, limit: 2 }, context: admin })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBeLessThanOrEqual(2)
         })
 
         it('C405: LIMIT + OFFSET', async () => {
           const r = await engine.query({ definition: { from: samples, limit: 2, offset: 2 }, context: admin })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBeLessThanOrEqual(2)
         })
 
@@ -2905,6 +3041,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, columns: ['status'], distinct: true },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             const statuses = new Set(r.data.map((row) => (row as Record<string, unknown>).status))
             expect(statuses.size).toBe(r.data.length)
@@ -2922,6 +3059,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(4)
         })
       })
@@ -2931,6 +3069,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
       describe('8. byIds', () => {
         it('C500: byIds returns matching rows', async () => {
           const r = await engine.query({ definition: { from: samples, byIds: [1, 2] }, context: admin })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect(r.data.length).toBe(2)
           }
@@ -2938,6 +3077,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
 
         it('C501: byIds with non-existent IDs', async () => {
           const r = await engine.query({ definition: { from: samples, byIds: [1, 999] }, context: admin })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(1)
         })
 
@@ -2955,6 +3095,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, byIds: [1, 2], joins: [{ table: sampleItems }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBeGreaterThan(0)
         })
 
@@ -2963,6 +3104,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, byIds: [1], columns: ['id', 'status'] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') {
             expect(r.meta.columns.length).toBe(2)
           }
@@ -2977,6 +3119,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(1)
         })
 
@@ -3004,6 +3147,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ table: sampleItems }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(4) // ids 1,2,3,5
         })
 
@@ -3012,6 +3156,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ table: sampleItems, exists: false }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(1) // id 4
         })
 
@@ -3023,6 +3168,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2) // ids 2, 5
         })
 
@@ -3039,6 +3185,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(4) // ids 1,2,3,5
         })
 
@@ -3047,6 +3194,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ table: sampleItems, filters: [{ table: sampleDetails }] }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3) // ids 1, 2, 5
         })
 
@@ -3055,6 +3203,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '>=', value: 2 } }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2) // ids 1, 5
         })
 
@@ -3063,6 +3212,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '=', value: 1 } }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2) // ids 2, 3
         })
 
@@ -3074,6 +3224,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(4) // ids 1,2,3,5 — count decides, not exists
         })
 
@@ -3082,6 +3233,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ table: samples }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3) // Beta, Gamma, Epsilon have valid managerId
         })
 
@@ -3094,6 +3246,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBeGreaterThan(0) // samples that manage others, with items
         })
 
@@ -3102,6 +3255,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '>', value: 1 } }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(2) // ids 1, 5
         })
 
@@ -3110,6 +3264,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '<', value: 2 } }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3) // ids 2,3,4 (includes 0-item parent)
         })
 
@@ -3118,6 +3273,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '!=', value: 0 } }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(4) // ids 1,2,3,5
         })
 
@@ -3126,6 +3282,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             definition: { from: samples, filters: [{ table: sampleItems, count: { operator: '<=', value: 1 } }] },
             context: admin,
           })
+          expect(r.kind).toBe('data')
           if (r.kind === 'data') expect(r.data.length).toBe(3) // ids 2,3,4 (includes 0-item parent)
         })
       })

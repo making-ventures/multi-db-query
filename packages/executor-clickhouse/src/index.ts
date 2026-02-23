@@ -1,5 +1,6 @@
 import { createClient } from '@clickhouse/client'
 import type { DbExecutor } from '@mkven/multi-db-query'
+import { ConnectionError } from '@mkven/multi-db-query'
 
 export interface ClickHouseExecutorConfig {
   readonly url?: string | undefined
@@ -42,7 +43,9 @@ export function createClickHouseExecutor(config: ClickHouseExecutorConfig): DbEx
     async ping(): Promise<void> {
       const result = await client.ping()
       if (!result.success) {
-        throw new Error('ClickHouse ping failed')
+        throw new ConnectionError('CONNECTION_FAILED', 'ClickHouse ping failed', {
+          url: config.url,
+        })
       }
     },
 

@@ -9,6 +9,7 @@ import {
   isFn,
   isGroup,
   safeAggFn,
+  safeWhereFn,
 } from '../generator/fragments.js'
 import type {
   AggregationClause,
@@ -211,7 +212,7 @@ class ChGenerator {
 
   // WhereFunction — levenshtein → editDistance
   private whereFn(c: WhereFunction): string {
-    const fn = c.fn === 'levenshtein' ? 'editDistance' : c.fn
+    const fn = safeWhereFn(c.fn) === 'levenshtein' ? 'editDistance' : safeWhereFn(c.fn)
     const col = quoteCol(c.column)
     return `${fn}(${col}, ${this.ref(c.fnParamIndex)}) ${c.operator} ${this.refTyped(c.compareParamIndex, 'UInt32')}`
   }
@@ -414,13 +415,13 @@ class ChGenerator {
 // --- Helpers ---
 
 function quoteCol(col: ColumnRef): string {
-  return `\`${col.tableAlias}\`.\`${col.columnName}\``
+  return `\`${escapeIdentBT(col.tableAlias)}\`.\`${escapeIdentBT(col.columnName)}\``
 }
 
 function quoteTable(ref: TableRef): string {
   const parts = ref.physicalName.split('.')
-  const quoted = parts.map((p) => `\`${p}\``).join('.')
-  return `${quoted} AS \`${ref.alias}\``
+  const quoted = parts.map((p) => `\`${escapeIdentBT(p)}\``).join('.')
+  return `${quoted} AS \`${escapeIdentBT(ref.alias)}\``
 }
 
 function chValueType(value: unknown): string {

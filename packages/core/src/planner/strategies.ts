@@ -10,6 +10,7 @@ import type {
 } from '@mkven/multi-db-validation'
 import { PlannerError } from '@mkven/multi-db-validation'
 import type { RegistrySnapshot } from '../metadata/registry.js'
+import type { CandidateDb } from './graph.js'
 import { evaluateCandidate, findAnyCandidateIgnoringFreshness, isFreshEnough } from './graph.js'
 import type { CachePlan, DialectName, DirectPlan, MaterializedPlan, PlannerOptions, TrinoPlan } from './planner.js'
 
@@ -163,13 +164,6 @@ export function tryDirect(tables: TableMeta[], snapshot: RegistrySnapshot): Dire
 
 // --- P2: Materialized ---
 
-interface CandidateDbLocal {
-  database: string
-  overrides: Map<string, string>
-  originalCount: number
-  worstLag: string
-}
-
 export function tryMaterialized(
   query: QueryDefinition,
   tables: TableMeta[],
@@ -181,7 +175,7 @@ export function tryMaterialized(
   if (databases.size <= 1) return undefined
 
   // Find all candidate databases
-  const candidates: CandidateDbLocal[] = []
+  const candidates: CandidateDb[] = []
 
   // Check each database that has at least one involved table
   for (const dbId of databases) {

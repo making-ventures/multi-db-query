@@ -62,3 +62,13 @@ export function escapeIdentDQ(value: string): string {
 export function escapeIdentBT(value: string): string {
   return value.replace(/`/g, '``')
 }
+
+const VALID_WHERE_FNS = new Set(['levenshtein', 'levenshtein_distance', 'editdistance'])
+
+/** Whitelist where-clause function name; throws if invalid. */
+export function safeWhereFn(fn: string): string {
+  if (!VALID_WHERE_FNS.has(fn.toLowerCase())) {
+    throw new Error(`Unsupported where function: ${fn}`)
+  }
+  return fn
+}
