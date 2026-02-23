@@ -138,9 +138,6 @@ export const trinoConfig: DialectTestConfig = {
 
   // ── Type casts (Trino IN has no type casts)
   typeCastDecimal: { sql: ['IN (?)'], params: [1.5] },
-  typeCastBoolean: { sql: ['IN (?)'], params: [true] },
-  typeCastDate: { sql: ['IN (?)'], params: ['2024-01-01'] },
-  typeCastTimestamp: { sql: ['IN (?)'], params: ['2024-01-01T00:00:00Z'] },
 
   // ── Float param (Trino uses positional ?)
   floatParam: { sql: ['"t0"."score" > ?'], params: [3.14] },

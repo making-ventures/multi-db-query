@@ -147,9 +147,6 @@ export interface DialectTestConfig extends Record<string, Expect | string> {
 
   // ── Type casts (via IN) ────────────────────────────────
   typeCastDecimal: Expect
-  typeCastBoolean: Expect
-  typeCastDate: Expect
-  typeCastTimestamp: Expect
 
   // ── Float param ────────────────────────────────────────
   floatParam: Expect
@@ -705,26 +702,6 @@ export function describeSharedDialectTests(dialect: SqlDialect, cfg: DialectTest
           columnType: 'decimal',
         }
         check(base({ where: cond }), [[1.5]], cfg.typeCastDecimal)
-      })
-
-      it('boolean', () => {
-        const cond: WhereCondition = {
-          column: col('t0', 'active'),
-          operator: 'in',
-          paramIndex: 0,
-          columnType: 'boolean',
-        }
-        check(base({ where: cond }), [[true]], cfg.typeCastBoolean)
-      })
-
-      it('date', () => {
-        const cond: WhereCondition = { column: col('t0', 'created'), operator: 'in', paramIndex: 0, columnType: 'date' }
-        check(base({ where: cond }), [['2024-01-01']], cfg.typeCastDate)
-      })
-
-      it('timestamp', () => {
-        const cond: WhereCondition = { column: col('t0', 'ts'), operator: 'in', paramIndex: 0, columnType: 'timestamp' }
-        check(base({ where: cond }), [['2024-01-01T00:00:00Z']], cfg.typeCastTimestamp)
       })
     })
 

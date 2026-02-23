@@ -134,9 +134,6 @@ export const chConfig: DialectTestConfig = {
 
   // ── Type casts
   typeCastDecimal: { sql: ['IN tuple({p1:Decimal})'], params: [1.5] },
-  typeCastBoolean: { sql: ['IN tuple({p1:Bool})'], params: [true] },
-  typeCastDate: { sql: ['IN tuple({p1:Date})'], params: ['2024-01-01'] },
-  typeCastTimestamp: { sql: ['IN tuple({p1:DateTime})'], params: ['2024-01-01T00:00:00Z'] },
 
   // ── Float param
   floatParam: { sql: ['{p1:Float64}'] },

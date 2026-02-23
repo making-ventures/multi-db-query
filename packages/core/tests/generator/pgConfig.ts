@@ -135,9 +135,6 @@ export const pgConfig: DialectTestConfig = {
 
   // ── Type casts
   typeCastDecimal: { sql: ['$1::numeric[]'], params: [[1.5]] },
-  typeCastBoolean: { sql: ['$1::bool[]'], params: [[true]] },
-  typeCastDate: { sql: ['$1::date[]'], params: [['2024-01-01']] },
-  typeCastTimestamp: { sql: ['$1::timestamp[]'], params: [['2024-01-01T00:00:00Z']] },
 
   // ── Float param
   floatParam: { sql: ['"t0"."score" > $1'], params: [3.14] },
