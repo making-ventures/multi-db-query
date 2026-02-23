@@ -1,12 +1,12 @@
 # Audit Fixes — CONTRACT_TESTS.md / Implementation / Design Doc
 
-> **Status: RESOLVED** — All actionable items completed. 677 tests pass, 4 skipped. All 167 spec IDs implemented.
+> **Status: RESOLVED** — All actionable items completed. 677 tests pass, 4 skipped. All 415 spec IDs implemented.
 
 > **Note:** CONTRACT_TESTS.md has moved to the [concept repo](https://github.com/making-ventures/concept-multi-db-query-engine/blob/main/CONTRACT_TESTS.md).
 
 Comprehensive list of inconsistencies found and fixed across:
 
-1. **CONTRACT_TESTS.md** — test design document (167 test IDs)
+1. **CONTRACT_TESTS.md** — test design document (415 test IDs)
 2. **Contract suites** — queryContract.ts, validationContract.ts, injectionContract.ts, edgeCaseContract.ts, errorContract.ts, healthLifecycleContract.ts
 3. **Design doc** — `concept-multi-db-query-engine/` (6 markdown files)
 4. **Implementation** — types, validators, resolvers, generators
