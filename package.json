@@ -19,7 +19,11 @@
     "compose:up": "docker compose -f compose/docker-compose.yml up -d --wait",
     "compose:down": "docker compose -f compose/docker-compose.yml down",
     "compose:restart": "docker compose -f compose/docker-compose.yml restart",
-    "compose:reset": "docker compose -f compose/docker-compose.yml down -v --remove-orphans"
+    "compose:reset": "docker compose -f compose/docker-compose.yml down -v --remove-orphans",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "bash all-checks.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",
@@ -27,6 +31,7 @@
     "@changesets/cli": "^2.29.0",
     "@mkven/multi-db-query": "workspace:*",
     "@mkven/multi-db-validation": "workspace:*",
+    "simple-git-hooks": "^2.13.1",
     "typescript": "^5.8.0",
     "vitest": "^4.0.18"
   }
