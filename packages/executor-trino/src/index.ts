@@ -1,5 +1,6 @@
 import type { DbExecutor } from '@mkven/multi-db-query'
 import { ConnectionError, ExecutionError } from '@mkven/multi-db-query'
+import { Trino } from 'trino-client'
 
 export interface TrinoExecutorConfig {
   readonly server: string
@@ -8,25 +9,6 @@ export interface TrinoExecutorConfig {
   readonly user?: string | undefined
   readonly source?: string | undefined
   readonly timeoutMs?: number | undefined
-}
-
-interface TrinoResponseColumn {
-  name: string
-  type: string
-}
-
-interface TrinoResponseError {
-  message: string
-  errorCode: number
-  errorName: string
-}
-
-interface TrinoResponse {
-  id: string
-  nextUri?: string
-  columns?: TrinoResponseColumn[]
-  data?: unknown[][]
-  error?: TrinoResponseError
 }
 
 /**
@@ -57,16 +39,13 @@ function rowToObject(columns: string[], row: unknown[]): Record<string, unknown>
 }
 
 export function createTrinoExecutor(config: TrinoExecutorConfig): DbExecutor {
-  const { server, catalog, schema, user, source, timeoutMs } = config
+  const options: Record<string, unknown> = { server: config.server }
+  if (config.catalog !== undefined) options.catalog = config.catalog
+  if (config.schema !== undefined) options.schema = config.schema
+  if (config.source !== undefined) options.source = config.source
+  if (config.user !== undefined) options.extraHeaders = { 'X-Trino-User': config.user }
 
-  function buildHeaders(): Record<string, string> {
-    const h: Record<string, string> = { 'Content-Type': 'text/plain' }
-    if (user !== undefined) h['X-Trino-User'] = user
-    if (catalog !== undefined) h['X-Trino-Catalog'] = catalog
-    if (schema !== undefined) h['X-Trino-Schema'] = schema
-    if (source !== undefined) h['X-Trino-Source'] = source
-    return h
-  }
+  const trino = Trino.create(options as import('trino-client').ConnectionOptions)
 
   function inlineParams(sql: string, params: unknown[]): string {
     let idx = 0
@@ -86,47 +65,32 @@ export function createTrinoExecutor(config: TrinoExecutorConfig): DbExecutor {
   }
 
   async function submitAndCollect(sql: string): Promise<Record<string, unknown>[]> {
-    const controller = new AbortController()
+    const iter = await trino.query(sql)
+    const columns: string[] = []
+    const allRows: Record<string, unknown>[] = []
+    let queryId: string | undefined
     let timer: ReturnType<typeof setTimeout> | undefined
-    if (timeoutMs !== undefined) {
-      timer = setTimeout(() => controller.abort(), timeoutMs)
-    }
 
     try {
-      const res = await fetch(`${server}/v1/statement`, {
-        method: 'POST',
-        headers: buildHeaders(),
-        body: sql,
-        signal: controller.signal,
-      })
-
-      let body = (await res.json()) as TrinoResponse
-
-      if (body.error !== undefined) throwTrinoError(sql, body.error.message)
-
-      const columns: string[] = body.columns?.map((c) => c.name) ?? []
-      const allRows: Record<string, unknown>[] = []
-
-      if (body.data !== undefined) {
-        for (const row of body.data) {
-          allRows.push(rowToObject(columns, row))
-        }
+      if (config.timeoutMs !== undefined) {
+        timer = setTimeout(() => {
+          if (queryId !== undefined) trino.cancel(queryId).catch(() => {})
+        }, config.timeoutMs)
       }
 
-      while (body.nextUri !== undefined) {
-        const nextRes = await fetch(body.nextUri, { signal: controller.signal })
-        body = (await nextRes.json()) as TrinoResponse
+      for await (const result of iter) {
+        queryId = result.id
 
-        if (body.error !== undefined) throwTrinoError(sql, body.error.message)
+        if (result.error !== undefined) throwTrinoError(sql, result.error.message)
 
-        if (body.columns !== undefined && columns.length === 0) {
-          for (const col of body.columns) {
+        if (result.columns !== undefined && columns.length === 0) {
+          for (const col of result.columns) {
             columns.push(col.name)
           }
         }
 
-        if (body.data !== undefined) {
-          for (const row of body.data) {
+        if (result.data !== undefined) {
+          for (const row of result.data) {
             allRows.push(rowToObject(columns, row))
           }
         }
@@ -163,7 +127,7 @@ export function createTrinoExecutor(config: TrinoExecutorConfig): DbExecutor {
     },
 
     async close(): Promise<void> {
-      // No persistent connection to close — Trino uses stateless REST API
+      // trino-client is HTTP-based — no persistent connection to close
     },
   }
 }

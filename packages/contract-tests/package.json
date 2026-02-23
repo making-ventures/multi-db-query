@@ -7,7 +7,6 @@
   "license": "MIT",
   "type": "module",
   "devDependencies": {
-    "@types/node": "^24.0.0",
     "@mkven/multi-db-cache-redis": "workspace:*",
     "@mkven/multi-db-client": "workspace:*",
     "@mkven/multi-db-contract": "workspace:*",
@@ -15,6 +14,8 @@
     "@mkven/multi-db-executor-postgres": "workspace:*",
     "@mkven/multi-db-executor-trino": "workspace:*",
     "@mkven/multi-db-query": "workspace:*",
-    "@mkven/multi-db-validation": "workspace:*"
+    "@mkven/multi-db-validation": "workspace:*",
+    "@types/node": "^24.0.0",
+    "trino-client": "^0.2.9"
   }
 }

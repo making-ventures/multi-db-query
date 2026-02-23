@@ -19,7 +19,13 @@
   "dependencies": {
     "@mkven/multi-db-query": "workspace:*"
   },
+  "peerDependencies": {
+    "trino-client": ">=0.2.0"
+  },
   "scripts": {
     "build": "tsc -b"
+  },
+  "devDependencies": {
+    "trino-client": "^0.2.9"
   }
 }
