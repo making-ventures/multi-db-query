@@ -471,8 +471,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         }
       })
 
-      it.skip('C723: one scope with zero roles (negative)', async () => {
-        // TODO: multi-scope role context not yet supported
+      it('C723: one scope with zero roles (negative)', async () => {
         await expectValidationError(
           engine,
           { from: 'orders' },
@@ -1077,8 +1076,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
       })
 
       // 12.4 Column Filter Validity
-      it.skip('C950: column filter type mismatch', async () => {
-        // TODO: refColumn type validation not yet implemented
+      it('C950: column filter type mismatch', async () => {
         await expectValidationError(
           engine,
           { from: 'orders', filters: [{ column: 'total', operator: '>', refColumn: 'status' }] },
@@ -1202,8 +1200,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         )
       })
 
-      it.skip('C977: QueryColumnFilter in HAVING group', async () => {
-        // TODO: refColumn in HAVING validation not yet implemented
+      it('C977: QueryColumnFilter in HAVING group', async () => {
         await expectValidationError(
           engine,
           {
@@ -2924,8 +2921,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           if (r.kind === 'data') expect(r.data.length).toBe(1) // id 4
         })
 
-        it.skip('C602: EXISTS with subquery filter', async () => {
-          // TODO: engine bug — 'No alias for table' when EXISTS has nested filters
+        it('C602: EXISTS with subquery filter', async () => {
           const r = await engine.query({
             definition: {
               from: samples,
@@ -2952,8 +2948,7 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           if (r.kind === 'data') expect(r.data.length).toBe(4) // ids 1,2,3,5
         })
 
-        it.skip('C604: nested EXISTS', async () => {
-          // TODO: engine bug — 'No alias for table' when EXISTS has nested filters
+        it('C604: nested EXISTS', async () => {
           const r = await engine.query({
             definition: { from: samples, filters: [{ table: sampleItems, filters: [{ table: sampleDetails }] }] },
             context: admin,

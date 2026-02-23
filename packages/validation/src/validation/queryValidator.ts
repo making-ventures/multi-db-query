@@ -26,7 +26,6 @@ import {
   isOperatorValidForType,
   matchesColumnType,
   NULL_OPS,
-  ORDERABLE_TYPES,
   resolveAggTable,
   resolveTableForFilter,
   resolveTableForGroupBy,
@@ -755,6 +754,16 @@ function validateCompoundValue(
   }
 }
 
+const NUMERIC_TYPES = new Set(['int', 'decimal'])
+const TEMPORAL_TYPES = new Set(['date', 'timestamp'])
+
+function areTypesCompatible(a: string, b: string): boolean {
+  if (a === b) return true
+  if (NUMERIC_TYPES.has(a) && NUMERIC_TYPES.has(b)) return true
+  if (TEMPORAL_TYPES.has(a) && TEMPORAL_TYPES.has(b)) return true
+  return false
+}
+
 function validateColumnFilter(
   filter: QueryColumnFilter,
   filterIndex: number,
@@ -821,8 +830,8 @@ function validateColumnFilter(
         details: { column: filter.column, refColumn: filter.refColumn, filterIndex },
       })
     } else if (leftCol.type !== rightCol.type) {
-      const bothOrderable = ORDERABLE_TYPES.has(leftCol.type) && ORDERABLE_TYPES.has(rightCol.type)
-      if (!bothOrderable) {
+      const compatible = areTypesCompatible(leftCol.type, rightCol.type)
+      if (!compatible) {
         errors.push({
           code: 'INVALID_FILTER',
           message: `Incompatible types: '${leftCol.type}' vs '${rightCol.type}'`,
@@ -950,6 +959,22 @@ function validateHavingFilter(
   aggAliases: ReadonlyMap<string, QueryAggregation>,
   errors: ValidationErrorEntry[],
 ): void {
+  if (isColumnFilter(filter as QueryFilter | QueryColumnFilter)) {
+    errors.push({
+      code: 'INVALID_HAVING',
+      message: 'QueryColumnFilter is not allowed in HAVING',
+      details: { filterIndex },
+    })
+    return
+  }
+  if (isExistsFilter(filter as QueryFilter | QueryExistsFilter)) {
+    errors.push({
+      code: 'INVALID_HAVING',
+      message: 'QueryExistsFilter is not allowed in HAVING',
+      details: { filterIndex },
+    })
+    return
+  }
   if (isFilterGroup(filter)) {
     if (!VALID_LOGIC_OPS.has(filter.logic)) {
       errors.push({

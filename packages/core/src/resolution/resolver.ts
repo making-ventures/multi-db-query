@@ -581,6 +581,10 @@ class ResolutionContext {
     // Resolve sub-filters
     let subWhere: WhereNode | undefined
     if (filter.filters !== undefined && filter.filters.length > 0) {
+      // Temporarily register the subquery alias so nested filters can resolve columns
+      const prevAlias = this.tableAliases.get(existsTable.id)
+      this.tableAliases.set(existsTable.id, subAlias)
+
       const subConditions: WhereNode[] = []
       for (const f of filter.filters) {
         const node = this.resolveFilterEntry(f, existsTable)
@@ -588,6 +592,14 @@ class ResolutionContext {
           subConditions.push(node)
         }
       }
+
+      // Restore previous alias (or remove if none existed)
+      if (prevAlias !== undefined) {
+        this.tableAliases.set(existsTable.id, prevAlias)
+      } else {
+        this.tableAliases.delete(existsTable.id)
+      }
+
       if (subConditions.length === 1) {
         subWhere = subConditions[0]
       } else if (subConditions.length > 0) {

@@ -6,25 +6,15 @@ Current test executions: **661** (includes masking, logger, and injection sql-on
 
 ---
 
-## Skipped Tests — 10
+## Skipped Tests — 5
 
-These tests are implemented but skipped (`it.skip`) due to engine bugs, missing features, or infrastructure requirements.
+These tests are implemented but skipped (`it.skip`) due to missing features or infrastructure requirements.
 
-### Engine Bugs (2)
-
-| ID | File | Description |
-|----|------|-------------|
-| C602 | queryContract.ts | EXISTS with subquery filter — "No alias for table" when EXISTS has nested filters |
-| C604 | queryContract.ts | Nested EXISTS — "No alias for table" when EXISTS has nested filters |
-
-### Feature Gaps (6)
+### Feature Gaps (3)
 
 | ID | File | Description |
 |----|------|-------------|
 | C202 | queryContract.ts | Multi-table join (3 tables) — transitive join resolution not supported |
-| C723 | queryContract.ts | One scope with zero roles — multi-scope role context not supported |
-| C950 | queryContract.ts | Column filter type mismatch — refColumn type validation not implemented |
-| C977 | queryContract.ts | QueryColumnFilter in HAVING — refColumn in HAVING validation not implemented |
 | C1711 | edgeCaseContract.ts | Materialized replica query — planner doesn't route to replica |
 | C1716 | edgeCaseContract.ts | Freshness hours allows stale replica — planner doesn't route to replica |
 

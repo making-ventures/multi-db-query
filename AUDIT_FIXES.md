@@ -85,18 +85,17 @@ These required CONTRACT_TESTS.md fixes before implementation — **all resolved*
 
 ---
 
-## 4. Skipped Tests — 10 remain
+## 4. Skipped Tests — 5 remain
 
-8 tests were unskipped in the original audit. Since then, 10 tests are skipped due to engine bugs, missing features, or infrastructure requirements.
+8 tests were unskipped in the original audit. Subsequently 5 more were unskipped by fixing engine bugs and adding validation:
+- **C602, C604** — EXISTS alias bug fixed in resolver (subquery alias now registered before resolving nested filters)
+- **C723** — `mergeAccess()` fixed to deny when any scope has `allowed: false` (matches core's `intersectScopes`)
+- **C950** — refColumn type validation tightened (numeric vs string now rejected; compatible families like int↔decimal still allowed)
+- **C977** — `validateHavingFilter()` now rejects `QueryColumnFilter` and `QueryExistsFilter` at top level (not just inside groups)
 
 | ID | File | Reason | Category |
 |----|------|--------|----------|
 | C202 | queryContract.ts | Engine does not support transitive join resolution (3 tables) | Feature gap |
-| C602 | queryContract.ts | Engine bug — "No alias for table" with nested EXISTS filters | Engine bug |
-| C604 | queryContract.ts | Engine bug — "No alias for table" with nested EXISTS | Engine bug |
-| C723 | queryContract.ts | Multi-scope role context not yet supported | Feature gap |
-| C950 | queryContract.ts | refColumn type validation not yet implemented | Feature gap |
-| C977 | queryContract.ts | refColumn in HAVING validation not yet implemented | Feature gap |
 | C1110 | queryContract.ts | Trino catalog not available in Docker Compose test setup | Infra |
 | C1711 | edgeCaseContract.ts | Planner doesn't route to replica when primary executor is available | Feature gap |
 | C1712 | edgeCaseContract.ts | Trino catalog not available in Docker Compose test setup | Infra |

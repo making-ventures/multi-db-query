@@ -190,20 +190,20 @@ export function computeEffectiveAccess(
 }
 
 export function mergeAccess(scopes: EffectiveAccess[]): EffectiveAccess {
-  const nonEmpty = scopes.filter((s) => s.allowed)
-  if (nonEmpty.length === 0) {
+  // All scopes must allow access (intersection = most restrictive)
+  if (scopes.length === 0 || scopes.some((s) => !s.allowed)) {
     return { allowed: false, allowedColumns: new Set() }
   }
-  const first = nonEmpty[0]
-  if (first === undefined || nonEmpty.length === 1) {
+  const first = scopes[0]
+  if (first === undefined || scopes.length === 1) {
     return first ?? { allowed: false, allowedColumns: new Set() }
   }
 
   // INTERSECTION between scopes
   let result: Set<string> | '*' = first.allowedColumns
 
-  for (let i = 1; i < nonEmpty.length; i++) {
-    const item = nonEmpty[i]
+  for (let i = 1; i < scopes.length; i++) {
+    const item = scopes[i]
     if (item === undefined) continue
     const next = item.allowedColumns
     if (result === '*' && next === '*') {
