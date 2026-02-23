@@ -111,6 +111,21 @@ export const chConfig: DialectTestConfig = {
   offset: { sql: ['OFFSET 20'] },
   limitOffset: { sql: ['LIMIT 10 OFFSET 20'] },
 
+  // ── IN / NOT IN
+  inUuid: { sql: ['`t0`.`id` IN tuple({p1:UUID}, {p2:UUID})'], params: ['id1', 'id2'] },
+  notInString: { sql: ['`t0`.`name` NOT IN tuple({p1:String}, {p2:String})'], params: ['a', 'b'] },
+  inInt: { sql: ['IN tuple({p1:Int32}, {p2:Int32})'], params: [1, 2] },
+  inDefaultType: { sql: ['IN tuple({p1:String})'], params: ['a'] },
+
+  // ── Type casts
+  typeCastDecimal: { sql: ['IN tuple({p1:Decimal})'], params: [1.5] },
+  typeCastBoolean: { sql: ['IN tuple({p1:Bool})'], params: [true] },
+  typeCastDate: { sql: ['IN tuple({p1:Date})'], params: ['2024-01-01'] },
+  typeCastTimestamp: { sql: ['IN tuple({p1:DateTime})'], params: ['2024-01-01T00:00:00Z'] },
+
+  // ── Float param
+  floatParam: { sql: ['{p1:Float64}'] },
+
   // ── Full query
   fullQuery: {
     sql: [

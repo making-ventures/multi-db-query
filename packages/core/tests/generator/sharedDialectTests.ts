@@ -138,6 +138,26 @@ export interface DialectTestConfig {
   offset: Expect
   limitOffset: Expect
 
+  // ── IN / NOT IN ────────────────────────────────────────
+  inUuid: Expect
+  notInString: Expect
+  inInt: Expect
+  inDefaultType: Expect
+  inSingleElement?: Expect
+
+  // ── Type casts (via IN) ────────────────────────────────
+  typeCastDecimal?: Expect
+  typeCastBoolean?: Expect
+  typeCastDate?: Expect
+  typeCastTimestamp?: Expect
+
+  // ── Float param ────────────────────────────────────────
+  floatParam?: Expect
+
+  // ── Catalog-qualified ──────────────────────────────────
+  catalogTable?: Expect
+  catalogJoin?: Expect
+
   // ── Full query ─────────────────────────────────────────
   fullQuery: Expect
   paramOrder: Expect
@@ -614,6 +634,93 @@ export function describeSharedDialectTests(dialect: SqlDialect, cfg: DialectTest
       it('offset', () => check(base({ offset: 20 }), [], cfg.offset))
       it('limit + offset', () => check(base({ limit: 10, offset: 20 }), [], cfg.limitOffset))
     })
+
+    // ── IN / NOT IN ───────────────────────────────────────
+
+    describe('IN / NOT IN', () => {
+      it('in with uuid type', () => {
+        const cond: WhereCondition = { column: col('t0', 'id'), operator: 'in', paramIndex: 0, columnType: 'uuid' }
+        check(base({ where: cond }), [['id1', 'id2']], cfg.inUuid)
+      })
+
+      it('notIn with string type', () => {
+        const cond: WhereCondition = { column: col('t0', 'name'), operator: 'notIn', paramIndex: 0, columnType: 'string' }
+        check(base({ where: cond }), [['a', 'b']], cfg.notInString)
+      })
+
+      it('in with int type', () => {
+        const cond: WhereCondition = { column: col('t0', 'age'), operator: 'in', paramIndex: 0, columnType: 'int' }
+        check(base({ where: cond }), [[1, 2]], cfg.inInt)
+      })
+
+      it('in defaults when type unknown', () => {
+        const cond: WhereCondition = { column: col('t0', 'name'), operator: 'in', paramIndex: 0 }
+        check(base({ where: cond }), [['a']], cfg.inDefaultType)
+      })
+
+      if (cfg.inSingleElement) {
+        it('in single element', () => {
+          const cond: WhereCondition = { column: col('t0', 'id'), operator: 'in', paramIndex: 0, columnType: 'uuid' }
+          check(base({ where: cond }), [['only']], cfg.inSingleElement!)
+        })
+      }
+    })
+
+    // ── Type casts (via IN) ───────────────────────────────
+
+    if (cfg.typeCastDecimal) {
+      describe('type casts', () => {
+        it('decimal', () => {
+          const cond: WhereCondition = { column: col('t0', 'price'), operator: 'in', paramIndex: 0, columnType: 'decimal' }
+          check(base({ where: cond }), [[1.5]], cfg.typeCastDecimal!)
+        })
+
+        it('boolean', () => {
+          const cond: WhereCondition = { column: col('t0', 'active'), operator: 'in', paramIndex: 0, columnType: 'boolean' }
+          check(base({ where: cond }), [[true]], cfg.typeCastBoolean!)
+        })
+
+        it('date', () => {
+          const cond: WhereCondition = { column: col('t0', 'created'), operator: 'in', paramIndex: 0, columnType: 'date' }
+          check(base({ where: cond }), [['2024-01-01']], cfg.typeCastDate!)
+        })
+
+        it('timestamp', () => {
+          const cond: WhereCondition = { column: col('t0', 'ts'), operator: 'in', paramIndex: 0, columnType: 'timestamp' }
+          check(base({ where: cond }), [['2024-01-01T00:00:00Z']], cfg.typeCastTimestamp!)
+        })
+      })
+    }
+
+    // ── Float param ───────────────────────────────────────
+
+    if (cfg.floatParam) {
+      describe('float param', () => {
+        it('float → dialect-specific type', () => {
+          const cond: WhereCondition = { column: col('t0', 'score'), operator: '>', paramIndex: 0 }
+          check(base({ where: cond }), [3.14], cfg.floatParam!)
+        })
+      })
+    }
+
+    // ── Catalog-qualified ─────────────────────────────────
+
+    if (cfg.catalogTable) {
+      describe('catalog-qualified', () => {
+        it('catalog-qualified table', () => {
+          check(base({ from: tbl(`${cfg.schema}.users`, 't0', 'pg_main') }), [], cfg.catalogTable!)
+        })
+
+        it('catalog-qualified join', () => {
+          const parts = base({
+            joins: [
+              { type: 'inner', table: tbl(`${sub}.orders`, 't1', 'pg_main'), leftColumn: col('t0', 'id'), rightColumn: col('t1', 'user_id') },
+            ],
+          })
+          check(parts, [], cfg.catalogJoin!)
+        })
+      })
+    }
 
     // ── Full query ────────────────────────────────────────
 

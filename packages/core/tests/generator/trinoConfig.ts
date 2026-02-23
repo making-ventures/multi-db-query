@@ -115,6 +115,17 @@ export const trinoConfig: DialectTestConfig = {
   offset: { sql: ['OFFSET 20'] },
   limitOffset: { sql: ['LIMIT 10 OFFSET 20'] },
 
+  // ── IN / NOT IN
+  inUuid: { sql: ['"t0"."id" IN (?, ?)'], params: ['id1', 'id2'] },
+  notInString: { sql: ['"t0"."name" NOT IN (?, ?)'], params: ['a', 'b'] },
+  inInt: { sql: ['IN (?, ?)'], params: [1, 2] },
+  inDefaultType: { sql: ['IN (?)'], params: ['a'] },
+  inSingleElement: { sql: ['"t0"."id" IN (?)'], params: ['only'] },
+
+  // ── Catalog-qualified
+  catalogTable: { sql: ['FROM "pg_main"."public"."users" AS "t0"'] },
+  catalogJoin: { sql: ['INNER JOIN "pg_main"."public"."orders" AS "t1"'] },
+
   // ── Full query
   fullQuery: {
     sql: [

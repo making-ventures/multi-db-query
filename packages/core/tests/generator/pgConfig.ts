@@ -113,6 +113,18 @@ export const pgConfig: DialectTestConfig = {
   offset: { sql: ['OFFSET 20'] },
   limitOffset: { sql: ['LIMIT 10 OFFSET 20'] },
 
+  // ── IN / NOT IN
+  inUuid: { sql: ['"t0"."id" = ANY($1::uuid[])'], params: [['id1', 'id2']] },
+  notInString: { sql: ['"t0"."name" <> ALL($1::text[])'], params: [['a', 'b']] },
+  inInt: { sql: ['"t0"."age" = ANY($1::integer[])'], params: [[1, 2]] },
+  inDefaultType: { sql: ['= ANY($1::text[])'], params: [['a']] },
+
+  // ── Type casts
+  typeCastDecimal: { sql: ['$1::numeric[]'], params: [[1.5]] },
+  typeCastBoolean: { sql: ['$1::bool[]'], params: [[true]] },
+  typeCastDate: { sql: ['$1::date[]'], params: [['2024-01-01']] },
+  typeCastTimestamp: { sql: ['$1::timestamp[]'], params: [['2024-01-01T00:00:00Z']] },
+
   // ── Full query
   fullQuery: {
     sql: [
