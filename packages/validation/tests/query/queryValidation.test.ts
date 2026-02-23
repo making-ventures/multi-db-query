@@ -1055,6 +1055,37 @@ describe('Edge cases', () => {
     expect(err?.errors.some((e) => e.code === 'ACCESS_DENIED')).toBe(true)
   })
 
+  it('multi-scope intersection: disjoint columns denies column access', () => {
+    // scope A allows ['id', 'firstName'], scope B allows ['email', 'age'] → intersection is empty
+    const roleA: RoleMeta = {
+      id: 'scope-a',
+      tables: [{ tableId: 'users', allowedColumns: ['id', 'firstName'] }],
+    }
+    const roleB: RoleMeta = {
+      id: 'scope-b',
+      tables: [{ tableId: 'users', allowedColumns: ['email', 'age'] }],
+    }
+    const customRoles = [roleA, roleB]
+    const idx = buildIndex(undefined, customRoles)
+    const ctx: ExecutionContext = { roles: { user: ['scope-a'], service: ['scope-b'] } }
+    const q: QueryDefinition = { from: 'users', columns: ['id'] }
+    const err = validateQuery(q, ctx, idx, customRoles)
+    expect(err).not.toBeNull()
+    expect(err?.errors.some((e) => e.code === 'ACCESS_DENIED')).toBe(true)
+  })
+
+  it('multi-scope intersection: wildcard ∩ specific restricts to specific', () => {
+    // scope A is admin (wildcard), scope B allows only ['id', 'firstName']
+    const customRoles = [adminRole, restrictedRole]
+    const idx = buildIndex(undefined, customRoles)
+    const ctx: ExecutionContext = { roles: { user: ['admin'], service: ['restricted'] } }
+    // 'email' is NOT in restricted → should be denied
+    const q: QueryDefinition = { from: 'users', columns: ['id', 'email'] }
+    const err = validateQuery(q, ctx, idx, customRoles)
+    expect(err).not.toBeNull()
+    expect(err?.errors.some((e) => e.code === 'ACCESS_DENIED' && e.details.column === 'email')).toBe(true)
+  })
+
   it('#234-235 nested EXISTS validates against parent table', () => {
     // Add reverse relation to ordersTable for nested EXISTS
     const config = validConfig()

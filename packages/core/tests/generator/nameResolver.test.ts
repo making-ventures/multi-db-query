@@ -52,9 +52,23 @@ const eventsTable: TableMeta = {
   relations: [{ column: 'userId', references: { table: 'users', column: 'id' }, type: 'many-to-one' as const }],
 }
 
+const invoicesTable: TableMeta = {
+  id: 'invoices',
+  database: 'pg-main',
+  physicalName: 'public.invoices',
+  apiName: 'invoices',
+  primaryKey: ['id'],
+  columns: [
+    { apiName: 'id', physicalName: 'id', type: 'uuid', nullable: false },
+    { apiName: 'orderId', physicalName: 'order_id', type: 'uuid', nullable: false },
+    { apiName: 'amount', physicalName: 'amount', type: 'decimal', nullable: false },
+  ],
+  relations: [{ column: 'orderId', references: { table: 'orders', column: 'id' }, type: 'many-to-one' as const }],
+}
+
 const config: MetadataConfig = {
   databases: [pgMain],
-  tables: [usersTable, ordersTable, eventsTable],
+  tables: [usersTable, ordersTable, eventsTable, invoicesTable],
   caches: [],
   externalSyncs: [],
 }
@@ -533,5 +547,111 @@ describe('Name Resolution — column mapping', () => {
     expect(ageMapping?.masked).toBe(true)
     // age has no maskingFn in metadata → effective access defaults to 'full'
     expect(ageMapping?.maskingFn).toBe('full')
+  })
+})
+
+describe('Name Resolution — transitive joins', () => {
+  it('3-table transitive join resolves through intermediary', () => {
+    // users → orders (direct FK), orders → invoices (direct FK)
+    // invoices has no FK to users — must go through orders
+    const q: QueryDefinition = {
+      from: 'users',
+      columns: ['id'],
+      joins: [{ table: 'orders', columns: [] }, { table: 'invoices', columns: ['amount'] }],
+    }
+    const result = resolveNames(q, adminCtx, index, rolesById)
+    expect(result.parts.joins).toHaveLength(2)
+
+    const invoiceJoin = result.parts.joins[1]
+    expect(invoiceJoin).toBeDefined()
+    // Join ON should reference orders (t1), not users (t0)
+    expect(invoiceJoin?.leftColumn.tableAlias).toBe('t1') // orders alias
+    expect(invoiceJoin?.leftColumn.columnName).toBe('id') // orders.id
+    expect(invoiceJoin?.rightColumn.columnName).toBe('order_id') // invoices.order_id
+  })
+
+  it('inner join type is preserved', () => {
+    const q: QueryDefinition = {
+      from: 'orders',
+      joins: [{ table: 'users', type: 'inner' }],
+    }
+    const result = resolveNames(q, adminCtx, index, rolesById)
+    expect(result.parts.joins[0]?.type).toBe('inner')
+  })
+})
+
+describe('Name Resolution — EXISTS variants', () => {
+  it('EXISTS with sub-filters resolves column against subquery alias', () => {
+    const q: QueryDefinition = {
+      from: 'users',
+      filters: [{ table: 'orders', exists: true, filters: [{ column: 'status', operator: '=', value: 'paid' }] }],
+    }
+    const result = resolveNames(q, adminCtx, index, rolesById)
+    const where = result.parts.where
+    expect(where).toBeDefined()
+
+    // Should be an exists node with a subquery that has a where clause
+    if (where !== undefined && 'exists' in where) {
+      expect(where.exists).toBe(true)
+      const sub = where.subquery
+      expect(sub.where).toBeDefined()
+      // Sub-filter column should use the subquery alias (s1), not the from alias (t0)
+      if (sub.where !== undefined && 'column' in sub.where) {
+        const col = sub.where.column
+        if (typeof col !== 'string') {
+          expect(col.tableAlias).toBe('s1')
+          expect(col.columnName).toBe('order_status')
+        }
+      }
+    }
+    expect(result.params).toContain('paid')
+  })
+
+  it('EXISTS on already-joined table restores alias after resolution', () => {
+    const q: QueryDefinition = {
+      from: 'users',
+      columns: ['id'],
+      joins: [{ table: 'orders', columns: ['status'] }],
+      filters: [{ table: 'orders', exists: true, filters: [{ column: 'total', operator: '>', value: 100 }] }],
+    }
+    const result = resolveNames(q, adminCtx, index, rolesById)
+    // Join should still reference t1 (original orders alias)
+    expect(result.parts.joins[0]?.table.alias).toBe('t1')
+    // Select columns from orders should use t1
+    const statusCol = result.parts.select.find((s) => s.columnName === 'order_status')
+    expect(statusCol?.tableAlias).toBe('t1')
+    // EXISTS sub-filter uses s2 (aliasCounter shared: t0=users, t1=orders join, s2=subquery)
+    const where = result.parts.where
+    if (where !== undefined && 'exists' in where) {
+      expect(where.subquery.from.alias).toBe('s2')
+    }
+  })
+
+  it('NOT EXISTS (exists: false)', () => {
+    const q: QueryDefinition = {
+      from: 'users',
+      filters: [{ table: 'orders', exists: false }],
+    }
+    const result = resolveNames(q, adminCtx, index, rolesById)
+    const where = result.parts.where
+    expect(where).toBeDefined()
+    if (where !== undefined && 'exists' in where) {
+      expect(where.exists).toBe(false)
+    }
+  })
+
+  it('EXISTS with count mode', () => {
+    const q: QueryDefinition = {
+      from: 'users',
+      filters: [{ table: 'orders', count: { operator: '>=', value: 3 } }],
+    }
+    const result = resolveNames(q, adminCtx, index, rolesById)
+    const where = result.parts.where
+    expect(where).toBeDefined()
+    // Count mode produces a WhereCountedSubquery, not WhereExists
+    if (where !== undefined && 'countParamIndex' in where) {
+      expect(where.operator).toBe('>=')
+      expect(result.params[where.countParamIndex]).toBe(3)
+    }
   })
 })

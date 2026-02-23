@@ -2,7 +2,7 @@
 
 All **167** contract test IDs from [CONTRACT_TESTS.md](https://github.com/making-ventures/concept-multi-db-query-engine/blob/main/CONTRACT_TESTS.md) are implemented.
 
-Current test executions: **669** (includes masking, logger, and injection sql-only unit tests).
+Current test executions: **677** (includes masking, logger, and injection sql-only unit tests).
 
 ---
 
