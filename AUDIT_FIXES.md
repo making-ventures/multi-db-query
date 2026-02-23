@@ -2,6 +2,8 @@
 
 > **Status: RESOLVED** — All actionable items completed. 469 tests pass, 0 skipped.
 
+> **Note:** CONTRACT_TESTS.md has moved to the [concept repo](https://github.com/making-ventures/concept-multi-db-query-engine/blob/main/CONTRACT_TESTS.md).
+
 Comprehensive list of inconsistencies found and fixed across:
 
 1. **CONTRACT_TESTS.md** — test design document (401 test IDs)

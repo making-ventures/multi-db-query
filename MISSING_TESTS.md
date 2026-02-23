@@ -1,6 +1,6 @@
 # Missing Contract Tests
 
-110 test IDs from [CONTRACT_TESTS.md](CONTRACT_TESTS.md) are not yet implemented.
+110 test IDs from [CONTRACT_TESTS.md](https://github.com/making-ventures/concept-multi-db-query-engine/blob/main/CONTRACT_TESTS.md) are not yet implemented.
 
 Currently implemented: **290 / 400** test IDs (469 test executions with pg/ch parameterization).
 
