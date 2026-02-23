@@ -108,13 +108,12 @@ Entire sections of CONTRACT_TESTS.md with no implementation yet. These are futur
 
 | Section | IDs | Count | Topic |
 |---------|-----|-------|-------|
-| 14 | C1200–C1208 | 9 | Error deserialization (HTTP → typed errors) |
-| 15 | C1300–C1316 | 17 | Planner / execution / provider errors |
-| 16 | C1400–C1470 | 71 | SQL injection prevention |
-| 17 | C1500–C1509 | 10 | Health check endpoint |
-| 18 | C1700–C1703 | 3 | Edge cases |
+| 14, 14b–14d | C1200–C1206, C1250–C1254, C1260–C1263, C1270–C1271 | 18 | Error deserialization, planner/execution/provider errors |
+| 15, 15b | C1300–C1304, C1310–C1313 | 9 | Health check, lifecycle |
+| 16 | C1400–C1465 | 66 | SQL injection prevention |
+| 18 | C1700–C1716 | 17 | Edge cases |
 
-**Total: 110 test IDs across 5 sections.**
+**Total: 110 test IDs across 4 sections.** See [MISSING_TESTS.md](MISSING_TESTS.md) for the full breakdown.
 
 ---
 

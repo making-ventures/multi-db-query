@@ -236,11 +236,11 @@ Sections 3–9 currently run each test ID × 2 variants (pg, ch). The spec requi
 | Dependency | Test IDs | Count |
 |---|---|---|
 | **No new infra** (validation-only) | C1404, C1405, C1411, C1418, C1421, C1460-C1465 | 11 |
-| **No new infra** (existing PG+CH) | C1700-C1709, C1713, C1714, C1400-C1410, C1416-C1417, C1423-C1427, C1431-C1441, C1446, C1453-C1454 | 39 |
+| **No new infra** (existing PG+CH) | C1400-C1403, C1406-C1410, C1412-C1417, C1419, C1423-C1427, C1431-C1441, C1446, C1448, C1449, C1453, C1454, C1700-C1709, C1713, C1714 | 49 |
 | **Redis** | C1304, C1710 | 2 |
 | **Debezium / materialized** | C1253, C1254, C1711, C1715, C1716 | 5 |
-| **Trino** | C1110, C1250-C1252, C1420-C1422, C1428-C1430, C1442-C1445, C1447-C1452, C1455-C1459, C1712 | 25 |
-| **Enhanced HTTP / lifecycle** | C1200-C1206, C1260-C1263, C1270-C1271, C1300-C1303, C1310-C1313 | 18 |
+| **Trino** | C1250-C1252, C1420, C1422, C1428-C1430, C1442-C1445, C1447, C1450-C1452, C1455-C1459, C1712 | 22 |
+| **Enhanced HTTP / lifecycle** | C1200-C1206, C1260-C1263, C1270-C1271, C1300-C1303, C1310-C1313 | 21 |
 | **Trino dialect parameterization** | 113 test IDs × trino variant | 113 runs |
 | **Total missing** | | **110 IDs + 113 trino variant runs** |
 
@@ -248,7 +248,7 @@ Sections 3–9 currently run each test ID × 2 variants (pg, ch). The spec requi
 
 1. **§16.1 Identifier injection** (11 tests) — validation-only, no DB needed
 2. **§18. Edge Cases** C1700-C1709, C1713, C1714 (12 tests) — existing PG+CH
-3. **§16.3 PG injection + §16.4 CH injection** (30 tests) — existing PG+CH
+3. **§16.2 PG/CH + §16.3 PG + §16.4 CH injection** (37 tests) — existing PG+CH
 4. **§15. Health Check** C1300-C1303 (4 tests) — existing infra
 5. **§14. Error Deserialization** (7 tests) — enhanced HTTP test harness
 6. **§14c. Execution Errors** (4 tests) — error injection
@@ -256,4 +256,4 @@ Sections 3–9 currently run each test ID × 2 variants (pg, ch). The spec requi
 8. **§14d. Provider Errors** (2 tests) — pluggable providers
 9. **Add Redis to compose** → C1304, C1710 (2 tests)
 10. **Add Debezium to compose** → C1253, C1254, C1711, C1715, C1716 (5 tests)
-11. **Add Trino to compose** → C1110, C1250-C1252, C1420-C1422, C1428-C1430, C1442-C1445, C1447-C1452, C1455-C1459, C1712, §16.2 alias tests, trino dialect variant (25 + 113 tests)
+11. **Add Trino to compose** → C1250-C1252, §16.2 Trino alias (C1422, C1450, C1451), §16.5 Trino injection, C1712, trino dialect variant (22 + 113 tests)
