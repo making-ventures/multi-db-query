@@ -1,6 +1,6 @@
 # Skipped Tests — Implementation Plan
 
-10 skipped tests, ordered by quick wins first.
+10 skipped tests → **6 fixed** (C202, C602, C604, C723, C950, C977), **4 remaining** (C1110, C1711, C1712, C1716).
 
 ## Phase 1 — C723: Multi-scope roles (bug fix, ~3 lines) ✅
 
@@ -60,12 +60,12 @@
 
 ## Summary
 
-| Phase | IDs | Type | Effort | Deps |
-|-------|-----|------|--------|------|
-| 1 | C723 | Bug fix | ~3 LOC | None |
-| 2 | C977 | Feature | ~6 LOC | None |
-| 3 | C950 | Feature | ~8 LOC | None |
-| 4 | C602, C604 | Bug fix | ~15 LOC | None |
-| 5 | C1110, C1712 | Infra | ~0 LOC | Docker Compose |
-| 6 | C202 | Feature | ~35 LOC | None |
-| 7 | C1711, C1716 | Feature | ~40 LOC | Debezium infra |
+| Phase | IDs | Type | Effort | Deps | Status |
+|-------|-----|------|--------|------|--------|
+| 1 | C723 | Bug fix | ~3 LOC | None | ✅ |
+| 2 | C977 | Feature | ~6 LOC | None | ✅ |
+| 3 | C950 | Feature | ~8 LOC | None | ✅ |
+| 4 | C602, C604 | Bug fix | ~15 LOC | None | ✅ |
+| 5 | C1110, C1712 | Infra | ~0 LOC | Docker Compose | ⬜ |
+| 6 | C202 | Feature | ~35 LOC | None | ✅ |
+| 7 | C1711, C1716 | Feature | ~40 LOC | Debezium infra | ⬜ |
