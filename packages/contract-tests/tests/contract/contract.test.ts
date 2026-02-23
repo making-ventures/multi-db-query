@@ -22,7 +22,7 @@ import {
   validateQuery,
 } from '@mkven/multi-db-query'
 import { afterAll, beforeAll } from 'vitest'
-import { createServer } from '../../../../compose/server/index.js'
+import { createServer } from '../../src/server.js'
 import { metadata, roles } from './fixture.js'
 
 const PG_URL = process.env.PG_URL ?? 'postgresql://postgres:postgres@localhost:5432/multidb'

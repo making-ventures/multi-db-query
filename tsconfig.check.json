@@ -17,5 +17,5 @@
     "verbatimModuleSyntax": true
   },
   "include": ["packages/*/src/**/*.ts", "packages/*/tests/**/*.ts"],
-  "exclude": ["node_modules", "**/dist", "**/contract.test.*"]
+  "exclude": ["node_modules", "**/dist", "**/contract.test.*", "packages/contract-tests/src"]
 }

@@ -2,8 +2,8 @@ import { createClickHouseExecutor } from '@mkven/multi-db-executor-clickhouse'
 import { createPostgresExecutor } from '@mkven/multi-db-executor-postgres'
 import { createTrinoExecutor } from '@mkven/multi-db-executor-trino'
 import { staticMetadata, staticRoles } from '@mkven/multi-db-query'
-import { metadata, roles } from '../../packages/client/tests/contract/fixture.js'
-import { createServer } from './index.js'
+import { metadata, roles } from '../tests/contract/fixture.js'
+import { createServer } from './server.js'
 
 const server = await createServer({
   port: Number(process.env.PORT ?? 3000),
