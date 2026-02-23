@@ -479,6 +479,27 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           'ACCESS_DENIED',
         )
       })
+
+      it('C724: multi-scope service has no table access (negative)', async () => {
+        // reporting-service has no users access → service scope denies users → ACCESS_DENIED
+        await expectValidationError(
+          engine,
+          { from: 'users', columns: ['id'] },
+          { roles: { user: ['tenant-user'], service: ['reporting-service'] } },
+          'ACCESS_DENIED',
+        )
+      })
+
+      it('C725: multi-scope wildcard ∩ specific restricts to specific', async () => {
+        // admin (wildcard) intersected with viewer (users: [id, firstName]) → restricted
+        // requesting 'email' which is outside viewer → ACCESS_DENIED
+        await expectValidationError(
+          engine,
+          { from: 'users', columns: ['id', 'email'] },
+          { roles: { user: ['admin'], service: ['viewer'] } },
+          'ACCESS_DENIED',
+        )
+      })
     })
 
     // ── 11. Column Masking ───────────────────────────────────
@@ -1112,6 +1133,34 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
         )
       })
 
+      it('C954: column filter same numeric family (int > decimal)', async () => {
+        // int and decimal are in the same numeric family — should pass
+        const r = await engine.query({
+          definition: {
+            from: 'orders',
+            columns: ['id'],
+            filters: [{ column: 'total', operator: '>', refColumn: 'quantity' }],
+            executeMode: 'sql-only',
+          },
+          context: admin,
+        })
+        expect(r.kind).toBe('sql')
+      })
+
+      it('C955: column filter same temporal family (timestamp > date)', async () => {
+        // timestamp and date both in temporal family — should pass
+        const r = await engine.query({
+          definition: {
+            from: 'invoices',
+            columns: ['id'],
+            filters: [{ column: 'issuedAt', operator: '>', refColumn: 'dueDate' }],
+            executeMode: 'sql-only',
+          },
+          context: admin,
+        })
+        expect(r.kind).toBe('sql')
+      })
+
       // 12.5 Join Validity
       it('C960: join with no relation defined', async () => {
         await expectValidationError(engine, { from: 'products', joins: [{ table: 'invoices' }] }, admin, 'INVALID_JOIN')
@@ -1123,6 +1172,16 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
           { from: 'orders', joins: [{ table: 'events' }] },
           tenantUser,
           'ACCESS_DENIED',
+        )
+      })
+
+      it('C962: transitive join with no path (3rd table unrelated)', async () => {
+        // products has no relation to orders or users — no transitive path
+        await expectValidationError(
+          engine,
+          { from: 'users', joins: [{ table: 'orders' }, { table: 'products' }] },
+          admin,
+          'INVALID_JOIN',
         )
       })
 
@@ -1271,6 +1330,41 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
             groupBy: [{ column: 'status' }],
             aggregations: [{ column: 'total', fn: 'sum', alias: 'x' }],
             having: [{ column: 'x', operator: 'arrayContains', value: 1 }],
+          },
+          admin,
+          'INVALID_HAVING',
+        )
+      })
+
+      it('C982: top-level QueryColumnFilter in HAVING (no group)', async () => {
+        await expectValidationError(
+          engine,
+          {
+            from: 'orders',
+            columns: ['status'],
+            groupBy: [{ column: 'status' }],
+            aggregations: [
+              { column: '*', fn: 'count', alias: 'cnt' },
+              { column: 'total', fn: 'sum', alias: 'totalSum' },
+            ],
+            // @ts-expect-error — refColumn not valid in having
+            having: [{ column: 'cnt', operator: '>', refColumn: 'totalSum' }],
+          },
+          admin,
+          'INVALID_HAVING',
+        )
+      })
+
+      it('C983: top-level QueryExistsFilter in HAVING (no group)', async () => {
+        await expectValidationError(
+          engine,
+          {
+            from: 'orders',
+            columns: ['status'],
+            groupBy: [{ column: 'status' }],
+            aggregations: [{ column: '*', fn: 'count', alias: 'cnt' }],
+            // @ts-expect-error — exists not valid in having
+            having: [{ table: 'users', exists: true }],
           },
           admin,
           'INVALID_HAVING',
