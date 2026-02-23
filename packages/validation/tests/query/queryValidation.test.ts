@@ -419,6 +419,37 @@ describe('Rule 5 — QueryColumnFilter', () => {
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).toBeNull()
   })
+
+  it('orderable but different families rejected (decimal vs string)', () => {
+    const idx = buildIndex()
+    const q: QueryDefinition = {
+      from: 'orders',
+      filters: [{ column: 'total', operator: '>', refColumn: 'status' }],
+    }
+    const err = validateQuery(q, adminCtx, idx, allRoles)
+    expect(err).not.toBeNull()
+    expect(err?.errors.some((e) => e.code === 'INVALID_FILTER' && e.message.includes('Incompatible'))).toBe(true)
+  })
+
+  it('int ↔ decimal compatible', () => {
+    const idx = buildIndex()
+    const q: QueryDefinition = {
+      from: 'orders',
+      filters: [{ column: 'total', operator: '>', refColumn: 'quantity' }],
+    }
+    const err = validateQuery(q, adminCtx, idx, allRoles)
+    expect(err).toBeNull()
+  })
+
+  it('date ↔ timestamp compatible', () => {
+    const idx = buildIndex()
+    const q: QueryDefinition = {
+      from: 'invoices',
+      filters: [{ column: 'issuedAt', operator: '>', refColumn: 'dueDate' }],
+    }
+    const err = validateQuery(q, adminCtx, idx, allRoles)
+    expect(err).toBeNull()
+  })
 })
 
 // --- Rule 5: Filter groups (recursive) ---
@@ -477,6 +508,29 @@ describe('Rule 6 — Join validity', () => {
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).not.toBeNull()
     expect(err?.errors.some((e) => e.code === 'UNKNOWN_TABLE' && e.details.table === 'nonExistent')).toBe(true)
+  })
+
+  it('transitive join through intermediary table', () => {
+    const idx = buildIndex()
+    // invoices → orders (orderId), orders → users (customerId)
+    const q: QueryDefinition = {
+      from: 'users',
+      joins: [{ table: 'orders' }, { table: 'invoices' }],
+    }
+    const err = validateQuery(q, adminCtx, idx, allRoles)
+    expect(err).toBeNull()
+  })
+
+  it('transitive join with no path rejects', () => {
+    const idx = buildIndex()
+    // metrics has no relation to orders or users
+    const q: QueryDefinition = {
+      from: 'users',
+      joins: [{ table: 'orders' }, { table: 'metrics' }],
+    }
+    const err = validateQuery(q, adminCtx, idx, allRoles)
+    expect(err).not.toBeNull()
+    expect(err?.errors.some((e) => e.code === 'INVALID_JOIN')).toBe(true)
   })
 })
 
@@ -610,6 +664,36 @@ describe('Rule 8 — Having validity', () => {
           conditions: [{ table: 'users', exists: true }],
         },
       ],
+    }
+    const err = validateQuery(q, adminCtx, idx, allRoles)
+    expect(err).not.toBeNull()
+    expect(err?.errors.some((e) => e.code === 'INVALID_HAVING' && e.message.includes('QueryExistsFilter'))).toBe(true)
+  })
+
+  it('top-level QueryColumnFilter in HAVING rejected', () => {
+    const idx = buildIndex()
+    const q: QueryDefinition = {
+      from: 'orders',
+      columns: ['status'],
+      groupBy: [{ column: 'status' }],
+      aggregations: [{ column: '*', fn: 'count', alias: 'cnt' }],
+      // @ts-expect-error intentional — refColumn not allowed in having
+      having: [{ column: 'cnt', operator: '>', refColumn: 'cnt' }],
+    }
+    const err = validateQuery(q, adminCtx, idx, allRoles)
+    expect(err).not.toBeNull()
+    expect(err?.errors.some((e) => e.code === 'INVALID_HAVING' && e.message.includes('QueryColumnFilter'))).toBe(true)
+  })
+
+  it('top-level QueryExistsFilter in HAVING rejected', () => {
+    const idx = buildIndex()
+    const q: QueryDefinition = {
+      from: 'orders',
+      columns: ['status'],
+      groupBy: [{ column: 'status' }],
+      aggregations: [{ column: '*', fn: 'count', alias: 'cnt' }],
+      // @ts-expect-error intentional — exists not allowed in having
+      having: [{ table: 'users', exists: true }],
     }
     const err = validateQuery(q, adminCtx, idx, allRoles)
     expect(err).not.toBeNull()
@@ -956,6 +1040,16 @@ describe('Edge cases', () => {
     const idx = buildIndex()
     const ctx: ExecutionContext = { roles: { user: [] } }
     const q: QueryDefinition = { from: 'users', columns: ['id'] }
+    const err = validateQuery(q, ctx, idx, allRoles)
+    expect(err).not.toBeNull()
+    expect(err?.errors.some((e) => e.code === 'ACCESS_DENIED')).toBe(true)
+  })
+
+  it('multi-scope with one denied scope denies all', () => {
+    const idx = buildIndex()
+    // user scope has zero roles → denied, service scope has access → still denied
+    const ctx: ExecutionContext = { roles: { user: [], service: ['orders-service'] } }
+    const q: QueryDefinition = { from: 'orders', columns: ['id'] }
     const err = validateQuery(q, ctx, idx, allRoles)
     expect(err).not.toBeNull()
     expect(err?.errors.some((e) => e.code === 'ACCESS_DENIED')).toBe(true)

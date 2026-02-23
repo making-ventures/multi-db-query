@@ -1,6 +1,6 @@
 # Audit Fixes — CONTRACT_TESTS.md / Implementation / Design Doc
 
-> **Status: RESOLVED** — All actionable items completed. 661 tests pass, 10 skipped. All 167 spec IDs implemented.
+> **Status: RESOLVED** — All actionable items completed. 669 tests pass, 4 skipped. All 167 spec IDs implemented.
 
 > **Note:** CONTRACT_TESTS.md has moved to the [concept repo](https://github.com/making-ventures/concept-multi-db-query-engine/blob/main/CONTRACT_TESTS.md).
 

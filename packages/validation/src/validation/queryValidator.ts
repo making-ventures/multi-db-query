@@ -101,7 +101,9 @@ export function validateQuery(
       // Check relation: from→join, join→from, or join↔any already-joined table
       const hasRelation =
         fromTable.relations.some((r) => r.references.table === joinTable.id || r.references.table === join.table) ||
-        joinTable.relations.some((r) => r.references.table === fromTable.id || r.references.table === definition.from) ||
+        joinTable.relations.some(
+          (r) => r.references.table === fromTable.id || r.references.table === definition.from,
+        ) ||
         hasTransitiveRelation(joinTable, join.table, joinedTables)
 
       if (!hasRelation) {

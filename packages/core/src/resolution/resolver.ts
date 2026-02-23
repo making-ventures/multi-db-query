@@ -389,9 +389,7 @@ class ResolutionContext {
     return undefined
   }
 
-  private findTransitiveRelation(
-    joinTable: TableMeta,
-  ): { leftColumn: ColumnRef; rightPhysical: string } | undefined {
+  private findTransitiveRelation(joinTable: TableMeta): { leftColumn: ColumnRef; rightPhysical: string } | undefined {
     for (const [tableId, alias] of this.tableAliases) {
       if (tableId === joinTable.id) continue
       const intermediary = this.index.getTable(tableId)
