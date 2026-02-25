@@ -106,5 +106,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Start Docker Compose
+        run: pnpm compose:up
+
       - name: Run integration tests
-        run: pnpm test:integration
+        run: pnpm vitest run packages/client/tests/contract/contract.test.ts
+
+      - name: Stop Docker Compose
+        if: always()
+        run: pnpm compose:down
