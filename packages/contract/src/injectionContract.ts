@@ -17,6 +17,11 @@ const admin: ExecutionContext = { roles: { user: ['admin'] } }
  * - `'rejected'` — the query is rejected with a `ValidationError`
  *   (caught before SQL generation) or an `ExecutionError` (DB rejected
  *   the escaped query, e.g. type mismatch).  Both are safe outcomes.
+ * - `'safe'` — either outcome is acceptable.  Use when the result
+ *   depends on execution mode (sql-only vs real DB).  For example
+ *   a string injected into a UUID column will succeed in sql-only
+ *   mode (value is parameterized) but be rejected by a real DB
+ *   (invalid UUID).  Both prove the injection was neutralised.
  *
  * Always pass the expected outcome explicitly.  Omitting it is
  * equivalent to `'escaped'`, which matches sql-only mode where values
@@ -28,7 +33,7 @@ const admin: ExecutionContext = { roles: { user: ['admin'] } }
 async function expectInjectionSafe(
   engine: QueryContract,
   definition: QueryDefinition,
-  expected: 'escaped' | 'rejected' = 'escaped',
+  expected: 'escaped' | 'rejected' | 'safe' = 'escaped',
 ): Promise<void> {
   try {
     const r = await engine.query({ definition, context: admin })
@@ -378,14 +383,18 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       })
 
       it('C1450: Trino HAVING referencing injected alias', async () => {
-        await expectInjectionSafe(engine, {
-          from: 'events',
-          columns: [],
-          joins: [{ table: 'users' }],
-          aggregations: [{ column: 'id', table: 'users', fn: 'count', alias: 'x"; --' }],
-          groupBy: [{ column: 'type' }],
-          having: [{ column: 'x"; --', operator: '>', value: 0 }],
-        })
+        await expectInjectionSafe(
+          engine,
+          {
+            from: 'events',
+            columns: [],
+            joins: [{ table: 'users' }],
+            aggregations: [{ column: 'id', table: 'users', fn: 'count', alias: 'x"; --' }],
+            groupBy: [{ column: 'type' }],
+            having: [{ column: 'x"; --', operator: '>', value: 0 }],
+          },
+          'safe',
+        )
       })
 
       it('C1451: Trino ORDER BY referencing injected alias', async () => {
@@ -516,10 +525,14 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       })
 
       it('C1410: PG byIds injection', async () => {
-        await expectInjectionSafe(engine, {
-          from: 'users',
-          byIds: ["'; DROP TABLE users; --"],
-        })
+        await expectInjectionSafe(
+          engine,
+          {
+            from: 'users',
+            byIds: ["'; DROP TABLE users; --"],
+          },
+          'safe',
+        )
       })
 
       it('C1494: PG between injection (string column)', async () => {
@@ -620,16 +633,20 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       })
 
       it('C1425: CH between filter injection', async () => {
-        await expectInjectionSafe(engine, {
-          from: 'events',
-          filters: [
-            {
-              column: 'timestamp',
-              operator: 'between',
-              value: { from: "2024-01-01'; DROP TABLE events; --", to: '2024-12-31' },
-            },
-          ],
-        })
+        await expectInjectionSafe(
+          engine,
+          {
+            from: 'events',
+            filters: [
+              {
+                column: 'timestamp',
+                operator: 'between',
+                value: { from: "2024-01-01'; DROP TABLE events; --", to: '2024-12-31' },
+              },
+            ],
+          },
+          'safe',
+        )
       })
 
       it('C1426: CH levenshteinLte injection', async () => {
@@ -663,16 +680,20 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       })
 
       it('C1438: CH notBetween injection', async () => {
-        await expectInjectionSafe(engine, {
-          from: 'events',
-          filters: [
-            {
-              column: 'timestamp',
-              operator: 'notBetween',
-              value: { from: "2024-01-01'; DROP TABLE events;--", to: '2024-12-31' },
-            },
-          ],
-        })
+        await expectInjectionSafe(
+          engine,
+          {
+            from: 'events',
+            filters: [
+              {
+                column: 'timestamp',
+                operator: 'notBetween',
+                value: { from: "2024-01-01'; DROP TABLE events;--", to: '2024-12-31' },
+              },
+            ],
+          },
+          'safe',
+        )
       })
 
       it('C1439: CH arrayContains injection', async () => {
@@ -704,10 +725,14 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       })
 
       it('C1446: CH byIds injection', async () => {
-        await expectInjectionSafe(engine, {
-          from: 'events',
-          byIds: ["'; DROP TABLE events; --"],
-        })
+        await expectInjectionSafe(
+          engine,
+          {
+            from: 'events',
+            byIds: ["'; DROP TABLE events; --"],
+          },
+          'safe',
+        )
       })
 
       it('C1454: CH like injection', async () => {
@@ -782,6 +807,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1420: Trino = filter injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: '=', value: "'; DROP TABLE users; --" }],
         })
@@ -790,6 +816,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1428: Trino in filter injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: 'in', value: ["x'; DROP TABLE users; --"] }],
         })
@@ -798,6 +825,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1429: Trino contains filter injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: 'contains', value: "'; DROP TABLE users; --" }],
         })
@@ -806,6 +834,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1430: Trino levenshteinLte injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [
             {
@@ -821,54 +850,77 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1442: Trino icontains injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: 'icontains', value: "'; DROP TABLE users; --" }],
         })
       })
 
       it('C1443: Trino arrayContains injection', async () => {
-        await expectInjectionSafe(engine, {
-          from: 'events',
-          joins: [{ table: 'users' }],
-          filters: [{ column: 'tags', operator: 'arrayContains', value: "x'; DROP TABLE events; --" }],
-        })
+        await expectInjectionSafe(
+          engine,
+          {
+            from: 'events',
+            columns: ['id'],
+            joins: [{ table: 'users' }],
+            filters: [{ column: 'tags', operator: 'arrayContains', value: "x'; DROP TABLE events; --" }],
+          },
+          'safe',
+        )
       })
 
       it('C1444: Trino arrayContainsAll injection', async () => {
-        await expectInjectionSafe(engine, {
-          from: 'events',
-          joins: [{ table: 'users' }],
-          filters: [{ column: 'tags', operator: 'arrayContainsAll', value: ["x'; DROP TABLE events; --"] }],
-        })
+        await expectInjectionSafe(
+          engine,
+          {
+            from: 'events',
+            columns: ['id'],
+            joins: [{ table: 'users' }],
+            filters: [{ column: 'tags', operator: 'arrayContainsAll', value: ["x'; DROP TABLE events; --"] }],
+          },
+          'safe',
+        )
       })
 
       it('C1445: Trino arrayContainsAny injection', async () => {
-        await expectInjectionSafe(engine, {
-          from: 'events',
-          joins: [{ table: 'users' }],
-          filters: [{ column: 'tags', operator: 'arrayContainsAny', value: ["x'; DROP TABLE events; --"] }],
-        })
+        await expectInjectionSafe(
+          engine,
+          {
+            from: 'events',
+            columns: ['id'],
+            joins: [{ table: 'users' }],
+            filters: [{ column: 'tags', operator: 'arrayContainsAny', value: ["x'; DROP TABLE events; --"] }],
+          },
+          'safe',
+        )
       })
 
       it('C1452: Trino notIn injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: 'notIn', value: ["x'; DROP TABLE users; --"] }],
         })
       })
 
       it('C1447: Trino byIds injection', async () => {
-        await expectInjectionSafe(engine, {
-          from: 'events',
-          joins: [{ table: 'users' }],
-          byIds: ["'; DROP TABLE users; --"],
-        })
+        await expectInjectionSafe(
+          engine,
+          {
+            from: 'events',
+            columns: ['id'],
+            joins: [{ table: 'users' }],
+            byIds: ["'; DROP TABLE users; --"],
+          },
+          'safe',
+        )
       })
 
       it('C1455: Trino like injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: 'like', value: "%'; DROP TABLE users; --%" }],
         })
@@ -879,6 +931,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
           engine,
           {
             from: 'events',
+            columns: ['id'],
             joins: [{ table: 'users' }],
             filters: [
               { column: 'age', table: 'users', operator: 'between', value: { from: '0; DROP TABLE users', to: 100 } },
@@ -893,6 +946,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
           engine,
           {
             from: 'events',
+            columns: ['id'],
             joins: [{ table: 'users' }],
             filters: [
               {
@@ -910,6 +964,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1458: Trino startsWith injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: 'startsWith', value: "'; DROP TABLE users; --" }],
         })
@@ -918,6 +973,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1459: Trino endsWith injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: 'endsWith', value: "'; DROP TABLE users; --" }],
         })
@@ -926,6 +982,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1496: Trino between injection (string column)', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [
             {
@@ -941,6 +998,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1497: Trino notBetween injection (string column)', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [
             {
@@ -956,6 +1014,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1514: Trino != filter injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: '!=', value: "'; DROP TABLE users; --" }],
         })
@@ -964,6 +1023,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1515: Trino notLike injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: 'notLike', value: "%'; DROP TABLE users; --%" }],
         })
@@ -972,6 +1032,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1516: Trino notContains injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: 'notContains', value: "'; DROP TABLE users; --" }],
         })
@@ -980,6 +1041,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1517: Trino notIcontains injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: 'notIcontains', value: "'; DROP TABLE users; --" }],
         })
@@ -988,6 +1050,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1518: Trino ilike injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: 'ilike', value: "%'; DROP TABLE users; --%" }],
         })
@@ -996,6 +1059,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1519: Trino notIlike injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: 'notIlike', value: "%'; DROP TABLE users; --%" }],
         })
@@ -1004,6 +1068,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1520: Trino istartsWith injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: 'istartsWith', value: "'; DROP TABLE users; --" }],
         })
@@ -1012,6 +1077,7 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       it('C1521: Trino iendsWith injection', async () => {
         await expectInjectionSafe(engine, {
           from: 'events',
+          columns: ['id'],
           joins: [{ table: 'users' }],
           filters: [{ column: 'email', table: 'users', operator: 'iendsWith', value: "'; DROP TABLE users; --" }],
         })
@@ -1044,10 +1110,14 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       })
 
       it('C1477: null byte injection in PG filter value', async () => {
-        await expectInjectionSafe(engine, {
-          from: 'orders',
-          filters: [{ column: 'status', operator: '=', value: "\0'; DROP TABLE orders; --" }],
-        })
+        await expectInjectionSafe(
+          engine,
+          {
+            from: 'orders',
+            filters: [{ column: 'status', operator: '=', value: "\0'; DROP TABLE orders; --" }],
+          },
+          'safe',
+        )
       })
 
       it('C1478: null byte injection in CH filter value', async () => {
@@ -1058,11 +1128,15 @@ export function describeInjectionContract(name: string, factory: () => Promise<Q
       })
 
       it('C1479: null byte injection in Trino filter value', async () => {
-        await expectInjectionSafe(engine, {
-          from: 'events',
-          joins: [{ table: 'users' }],
-          filters: [{ column: 'email', table: 'users', operator: '=', value: "\0'; DROP TABLE users; --" }],
-        })
+        await expectInjectionSafe(
+          engine,
+          {
+            from: 'events',
+            joins: [{ table: 'users' }],
+            filters: [{ column: 'email', table: 'users', operator: '=', value: "\0'; DROP TABLE users; --" }],
+          },
+          'safe',
+        )
       })
 
       it('C1480: unicode apostrophe injection in PG filter value', async () => {

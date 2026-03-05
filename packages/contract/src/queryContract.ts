@@ -1210,10 +1210,10 @@ export function describeQueryContract(name: string, factory: () => Promise<Query
       })
 
       it('C962: transitive join with no path (3rd table unrelated)', async () => {
-        // products has no relation to orders or users — no transitive path
+        // products has no relation to events or users — no transitive path
         await expectValidationError(
           engine,
-          { from: 'users', joins: [{ table: 'orders' }, { table: 'products' }] },
+          { from: 'events', joins: [{ table: 'users' }, { table: 'products' }] },
           admin,
           'INVALID_JOIN',
         )
