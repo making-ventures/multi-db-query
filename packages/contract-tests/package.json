@@ -15,7 +15,7 @@
     "@mkven/multi-db-executor-trino": "workspace:*",
     "@mkven/multi-db-query": "workspace:*",
     "@mkven/multi-db-validation": "workspace:*",
-    "@types/node": "^24.0.0",
+    "@types/node": "^24.11.0",
     "trino-client": "^0.2.9"
   }
 }
