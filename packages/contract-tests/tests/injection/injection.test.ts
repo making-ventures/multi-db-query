@@ -11,7 +11,7 @@ import type { QueryContract } from '@mkven/multi-db-contract'
 import { describeInjectionContract } from '@mkven/multi-db-contract'
 import type { CacheProvider, CreateMultiDbOptions, DbExecutor } from '@mkven/multi-db-query'
 import { createMultiDb, staticMetadata, staticRoles } from '@mkven/multi-db-query'
-import { metadata, roles } from '../contract/fixture.js'
+import { injectionConfig, metadata, roles } from '../contract/fixture.js'
 
 // ── Mock adapters ──────────────────────────────────────────────
 
@@ -49,21 +49,25 @@ function sqlOnlyProxy(db: { query: QueryContract['query'] }): QueryContract {
   }
 }
 
-// ── Run the canonical 74 injection tests ───────────────────────
+// ── Run the canonical injection tests ──────────────────────────
 
-describeInjectionContract('unit (sql-only)', async () => {
-  const options: CreateMultiDbOptions = {
-    metadataProvider: staticMetadata(metadata),
-    roleProvider: staticRoles(roles),
-    executors: {
-      'pg-main': mockExecutor(),
-      'ch-analytics': mockExecutor(),
-      trino: mockExecutor(),
-    },
-    cacheProviders: {
-      'redis-main': mockCache(),
-    },
-  }
-  const db = await createMultiDb(options)
-  return sqlOnlyProxy(db)
-})
+describeInjectionContract(
+  'unit (sql-only)',
+  async () => {
+    const options: CreateMultiDbOptions = {
+      metadataProvider: staticMetadata(metadata),
+      roleProvider: staticRoles(roles),
+      executors: {
+        'pg-main': mockExecutor(),
+        'ch-analytics': mockExecutor(),
+        trino: mockExecutor(),
+      },
+      cacheProviders: {
+        'redis-main': mockCache(),
+      },
+    }
+    const db = await createMultiDb(options)
+    return sqlOnlyProxy(db)
+  },
+  injectionConfig,
+)

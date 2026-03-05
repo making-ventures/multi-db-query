@@ -24,7 +24,7 @@ import {
 } from '@mkven/multi-db-query'
 import { afterAll, beforeAll } from 'vitest'
 import { createServer } from '../../src/server.js'
-import { metadata, roles } from './fixture.js'
+import { injectionConfig, metadata, roles } from './fixture.js'
 
 const PG_URL = process.env.PG_URL ?? 'postgresql://postgres:postgres@localhost:5432/multidb'
 const CH_URL = process.env.CH_URL ?? 'http://localhost:8123'
@@ -116,9 +116,13 @@ describeErrorContract('http-client', () => serverUrl, freshOptions)
 
 // ── SQL injection (in-process) ─────────────────────────────────
 
-describeInjectionContract('real-dbs (in-process)', async () => {
-  return createMultiDb(multiDbOptions)
-})
+describeInjectionContract(
+  'real-dbs (in-process)',
+  async () => {
+    return createMultiDb(multiDbOptions)
+  },
+  injectionConfig,
+)
 
 // ── Validation contract (in-process, zero I/O) ────────────────
 

@@ -1,3 +1,4 @@
+import type { InjectionContractConfig } from '@mkven/multi-db-contract'
 import type { MetadataConfig, RoleMeta } from '@mkven/multi-db-validation'
 
 // ── Databases ──────────────────────────────────────────────────
@@ -374,6 +375,55 @@ export const roles: RoleMeta[] = [
     ],
   },
 ]
+
+// ── Injection contract config ──────────────────────────────────
+
+export const injectionConfig: InjectionContractConfig = {
+  structural: {
+    table: 'orders',
+    idColumn: 'id',
+    stringColumn: 'status',
+    numericColumn: 'total',
+    refColumn: 'customerId',
+    secondTable: 'events',
+    existsTable: 'users',
+    joinFrom: 'events',
+    joinTo: 'users',
+  },
+  targets: [
+    {
+      label: 'orders',
+      from: 'orders',
+      string: { column: 'status' },
+      numeric: { column: 'total' },
+      agg: { column: 'total', fn: 'sum', groupBy: 'status' },
+      byIds: 'safe',
+      nullByteExpected: 'safe',
+    },
+    {
+      label: 'events',
+      from: 'events',
+      string: { column: 'type' },
+      timestamp: { column: 'timestamp' },
+      array: { column: 'tags' },
+      levenshtein: { column: 'type' },
+      agg: { column: 'timestamp', fn: 'count', groupBy: 'type' },
+      byIds: 'safe',
+    },
+    {
+      label: 'events+users',
+      from: 'events',
+      join: 'users',
+      string: { column: 'email', table: 'users' },
+      numeric: { column: 'age', table: 'users' },
+      array: { column: 'tags', expected: 'safe' },
+      levenshtein: { column: 'firstName', table: 'users' },
+      agg: { column: 'id', table: 'users', fn: 'count', groupBy: 'type' },
+      byIds: 'safe',
+      nullByteExpected: 'safe',
+    },
+  ],
+}
 
 // ── Seed Data ──────────────────────────────────────────────────
 
