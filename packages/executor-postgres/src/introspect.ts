@@ -54,34 +54,11 @@ const PG_TYPE_MAP: Record<string, ColumnType> = {
   timestamptz: 'timestamp',
 }
 
-const PG_ARRAY_TYPE_MAP: Record<string, ColumnType> = {
-  'text[]': 'string[]',
-  'character varying[]': 'string[]',
-  'varchar[]': 'string[]',
-  'integer[]': 'int[]',
-  'int[]': 'int[]',
-  'bigint[]': 'int[]',
-  'smallint[]': 'int[]',
-  'numeric[]': 'decimal[]',
-  'decimal[]': 'decimal[]',
-  'real[]': 'decimal[]',
-  'double precision[]': 'decimal[]',
-  'boolean[]': 'boolean[]',
-  'bool[]': 'boolean[]',
-  'uuid[]': 'uuid[]',
-  'date[]': 'date[]',
-  'timestamp without time zone[]': 'timestamp[]',
-  'timestamp with time zone[]': 'timestamp[]',
-  'timestamp[]': 'timestamp[]',
-  'timestamptz[]': 'timestamp[]',
-}
-
 function mapPgType(pgType: string, isArray: boolean): ColumnType | undefined {
-  if (isArray) {
-    // Try direct match first, then strip ARRAY suffix
-    return PG_ARRAY_TYPE_MAP[pgType] ?? PG_ARRAY_TYPE_MAP[`${pgType}[]`]
-  }
-  return PG_TYPE_MAP[pgType]
+  const base = PG_TYPE_MAP[pgType]
+  if (base === undefined) return undefined
+  if (isArray) return `${base}[]` as ColumnType
+  return base
 }
 
 // ── SQL queries ────────────────────────────────────────────────
@@ -262,16 +239,12 @@ export async function introspectPostgres(options: IntrospectPostgresOptions): Pr
       const tableApiName = mapName(entry.table)
 
       const columns = []
-      const skippedColumns: string[] = []
 
       for (const col of entry.columns) {
         const pgType = col.is_array ? col.udt_name.replace(/^_/, '') : col.data_type.toLowerCase()
         const colType = mapPgType(pgType, col.is_array)
 
-        if (colType === undefined) {
-          skippedColumns.push(col.column_name)
-          continue
-        }
+        if (colType === undefined) continue
 
         columns.push({
           apiName: mapName(col.column_name),
@@ -285,14 +258,18 @@ export async function introspectPostgres(options: IntrospectPostgresOptions): Pr
       const fks = fkIndex.get(key) ?? []
       const relations = fks
         .filter((fk) => tableApiNames.has(fk.referenced_table))
-        .map((fk) => ({
-          column: mapName(fk.column_name),
-          references: {
-            table: tableApiNames.get(fk.referenced_table)!,
-            column: mapName(fk.referenced_column),
-          },
-          type: 'many-to-one' as const,
-        }))
+        .map((fk) => {
+          // Safe: the filter above guarantees the key exists
+          const refTable = tableApiNames.get(fk.referenced_table) as string
+          return {
+            column: mapName(fk.column_name),
+            references: {
+              table: refTable,
+              column: mapName(fk.referenced_column),
+            },
+            type: 'many-to-one' as const,
+          }
+        })
 
       tables.push({
         id: tableApiName,

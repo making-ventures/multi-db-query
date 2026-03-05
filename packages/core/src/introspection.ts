@@ -47,9 +47,14 @@ export interface IntrospectResult {
 
 /** Convert `snake_case` (or any `_`-separated) identifier to `camelCase`. */
 export function snakeToCamel(name: string): string {
-  return name.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase())
+  if (!name.includes('_')) return name
+  const parts = name.split(/_+/).filter(Boolean)
+  return parts
+    .map((s, i) => (i === 0 ? s.toLowerCase() : s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()))
+    .join('')
 }
 
+/** Resolve an `ApiNameMapper` option into a concrete mapping function. */
 export function resolveApiNameMapper(mapper: ApiNameMapper | undefined): (raw: string) => string {
   if (mapper === undefined || mapper === 'camelCase') return snakeToCamel
   if (mapper === 'preserve') return (x) => x

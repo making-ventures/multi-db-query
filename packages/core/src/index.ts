@@ -73,10 +73,10 @@ export {
 } from './generator/fragments.js'
 // Generator
 export { generateSql } from './generator/generator.js'
-export { applyMask } from './masking/masking.js'
 // Introspection (shared types for executor-specific introspectors)
 export type { ApiNameMapper, IntrospectOptions, IntrospectResult } from './introspection.js'
 export { introspectionMetadataProvider, resolveApiNameMapper, snakeToCamel } from './introspection.js'
+export { applyMask } from './masking/masking.js'
 // Static provider helpers
 export { staticMetadata, staticRoles } from './metadata/providers.js'
 // Metadata Registry
@@ -85,9 +85,6 @@ export { MetadataRegistry } from './metadata/registry.js'
 // Pipeline
 export type { CreateMultiDbOptions, MultiDb } from './pipeline.js'
 export { createMultiDb } from './pipeline.js'
-// Single-database convenience
-export type { CreateSingleDbOptions, SingleDbTable } from './singleDb.js'
-export { createSingleDb } from './singleDb.js'
 // Query Planner
 export type {
   CachePlan,
@@ -102,6 +99,9 @@ export { planQuery } from './planner/planner.js'
 // Name Resolution
 export type { ResolveResult } from './resolution/resolver.js'
 export { resolveNames } from './resolution/resolver.js'
+// Single-database convenience
+export type { CreateSingleDbOptions, SingleDbTable } from './singleDb.js'
+export { createSingleDb } from './singleDb.js'
 // Public interfaces
 export type { CacheProvider, DbExecutor } from './types/interfaces.js'
 // IR types (internal)

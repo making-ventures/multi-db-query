@@ -85,9 +85,7 @@ describe('createSingleDb', () => {
       executor: mockExecutor(),
     })
 
-    await expect(
-      db.query({ definition: { from: 'nonexistent' }, context: admin }),
-    ).rejects.toThrow(ValidationError)
+    await expect(db.query({ definition: { from: 'nonexistent' }, context: admin })).rejects.toThrow(ValidationError)
 
     await db.close()
   })
@@ -100,9 +98,9 @@ describe('createSingleDb', () => {
       executor: mockExecutor(),
     })
 
-    await expect(
-      db.query({ definition: { from: 'users', columns: ['bogus'] }, context: admin }),
-    ).rejects.toThrow(ValidationError)
+    await expect(db.query({ definition: { from: 'users', columns: ['bogus'] }, context: admin })).rejects.toThrow(
+      ValidationError,
+    )
 
     await db.close()
   })
@@ -182,16 +180,16 @@ describe('createSingleDb', () => {
 
     await db.close()
 
-    await expect(
-      db.query({ definition: { from: 'users' }, context: admin }),
-    ).rejects.toThrow(ExecutionError)
+    await expect(db.query({ definition: { from: 'users' }, context: admin })).rejects.toThrow(ExecutionError)
   })
 
   it('skips connection validation when disabled', async () => {
     let pinged = false
     const executor: DbExecutor = {
       execute: async () => [],
-      ping: async () => { pinged = true },
+      ping: async () => {
+        pinged = true
+      },
       close: async () => {},
     }
 

@@ -1,8 +1,27 @@
-import { introspectionMetadataProvider } from '@mkven/multi-db-query'
 import { introspectPostgres } from '@mkven/multi-db-executor-postgres'
+import type { IntrospectResult } from '@mkven/multi-db-query'
+import { introspectionMetadataProvider } from '@mkven/multi-db-query'
 import { describe, expect, it } from 'vitest'
 
 const PG_URL = process.env.PG_URL ?? 'postgresql://postgres:postgres@localhost:5432/multidb'
+
+type IntrospectedTable = IntrospectResult['tables'][number]
+
+/** Find a table by apiName and fail the test if missing. */
+function findTable(result: IntrospectResult, apiName: string): IntrospectedTable {
+  const table = result.tables.find((t) => t.apiName === apiName)
+  expect(table, `table "${apiName}" should exist`).toBeDefined()
+  // biome-ignore lint/style/noNonNullAssertion: guarded by expect above
+  return table!
+}
+
+/** Find a column by apiName and fail the test if missing. */
+function findColumn(columns: IntrospectedTable['columns'], apiName: string): IntrospectedTable['columns'][number] {
+  const col = columns.find((c) => c.apiName === apiName)
+  expect(col, `column "${apiName}" should exist`).toBeDefined()
+  // biome-ignore lint/style/noNonNullAssertion: guarded by expect above
+  return col!
+}
 
 describe('introspectPostgres', () => {
   it('discovers tables from the public schema', async () => {
@@ -13,16 +32,12 @@ describe('introspectPostgres', () => {
 
     expect(result.tables.length).toBeGreaterThan(0)
 
-    // Should find the orders table
-    const orders = result.tables.find((t) => t.apiName === 'orders')
-    expect(orders).toBeDefined()
-    expect(orders!.physicalName).toBe('public.orders')
-    expect(orders!.columns.length).toBeGreaterThan(0)
+    const orders = findTable(result, 'orders')
+    expect(orders.physicalName).toBe('public.orders')
+    expect(orders.columns.length).toBeGreaterThan(0)
 
-    // Columns should be camelCased by default
-    const idCol = orders!.columns.find((c) => c.apiName === 'id')
-    expect(idCol).toBeDefined()
-    expect(idCol!.physicalName).toBe('id')
+    const idCol = findColumn(orders.columns, 'id')
+    expect(idCol.physicalName).toBe('id')
   })
 
   it('discovers primary keys', async () => {
@@ -31,21 +46,18 @@ describe('introspectPostgres', () => {
       schemas: ['public'],
     })
 
-    const orders = result.tables.find((t) => t.apiName === 'orders')
-    expect(orders).toBeDefined()
-    expect(orders!.primaryKey).toContain('id')
+    const orders = findTable(result, 'orders')
+    expect(orders.primaryKey).toContain('id')
   })
 
   it('returns empty relations when no FK constraints exist', async () => {
-    // The test DB has no explicit FOREIGN KEY constraints
     const result = await introspectPostgres({
       connection: { connectionString: PG_URL },
       schemas: ['public'],
     })
 
-    const orders = result.tables.find((t) => t.apiName === 'orders')
-    expect(orders).toBeDefined()
-    expect(orders!.relations).toEqual([])
+    const orders = findTable(result, 'orders')
+    expect(orders.relations).toEqual([])
   })
 
   it('maps PG types to ColumnType', async () => {
@@ -54,15 +66,24 @@ describe('introspectPostgres', () => {
       schemas: ['public'],
     })
 
-    const orders = result.tables.find((t) => t.apiName === 'orders')!
+    const orders = findTable(result, 'orders')
     const cols = new Map(orders.columns.map((c) => [c.apiName, c]))
 
-    // int column
-    expect(cols.get('id')!.type).toBe('int')
-    // decimal column
-    expect(cols.get('totalAmount')!.type).toBe('decimal')
-    // string column
-    expect(cols.get('orderStatus')!.type).toBe('string')
+    expect(cols.get('id')?.type).toBe('int')
+    expect(cols.get('totalAmount')?.type).toBe('decimal')
+    expect(cols.get('orderStatus')?.type).toBe('string')
+    expect(cols.get('priorities')?.type).toBe('int[]')
+  })
+
+  it('maps array types correctly', async () => {
+    const result = await introspectPostgres({
+      connection: { connectionString: PG_URL },
+      schemas: ['public'],
+    })
+
+    const products = findTable(result, 'products')
+    const labelsCol = findColumn(products.columns, 'labels')
+    expect(labelsCol.type).toBe('string[]')
   })
 
   it('excludes specified tables', async () => {
@@ -83,12 +104,9 @@ describe('introspectPostgres', () => {
       apiNameMapper: 'preserve',
     })
 
-    const orders = result.tables.find((t) => t.apiName === 'orders')
-    expect(orders).toBeDefined()
-
-    // snake_case columns should not be converted
-    const totalCol = orders!.columns.find((c) => c.apiName === 'total_amount')
-    expect(totalCol).toBeDefined()
+    const orders = findTable(result, 'orders')
+    const totalCol = findColumn(orders.columns, 'total_amount')
+    expect(totalCol.physicalName).toBe('total_amount')
   })
 
   it('wraps result into MetadataProvider via introspectionMetadataProvider', async () => {
