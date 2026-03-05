@@ -82,6 +82,9 @@ export { MetadataRegistry } from './metadata/registry.js'
 // Pipeline
 export type { CreateMultiDbOptions, MultiDb } from './pipeline.js'
 export { createMultiDb } from './pipeline.js'
+// Single-database convenience
+export type { CreateSingleDbOptions, SingleDbTable } from './singleDb.js'
+export { createSingleDb } from './singleDb.js'
 // Query Planner
 export type {
   CachePlan,
