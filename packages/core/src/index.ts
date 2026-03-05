@@ -74,6 +74,9 @@ export {
 // Generator
 export { generateSql } from './generator/generator.js'
 export { applyMask } from './masking/masking.js'
+// Introspection (shared types for executor-specific introspectors)
+export type { ApiNameMapper, IntrospectOptions, IntrospectResult } from './introspection.js'
+export { introspectionMetadataProvider, resolveApiNameMapper, snakeToCamel } from './introspection.js'
 // Static provider helpers
 export { staticMetadata, staticRoles } from './metadata/providers.js'
 // Metadata Registry

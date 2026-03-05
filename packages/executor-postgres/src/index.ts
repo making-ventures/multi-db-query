@@ -62,3 +62,5 @@ export function createPostgresExecutor(config: PostgresExecutorConfig): DbExecut
 }
 
 export type { DbExecutor } from '@mkven/multi-db-query'
+export type { IntrospectPostgresOptions } from './introspect.js'
+export { introspectPostgres } from './introspect.js'
