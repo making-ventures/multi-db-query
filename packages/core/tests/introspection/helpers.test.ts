@@ -102,6 +102,7 @@ describe('introspectionMetadataProvider', () => {
           relations: [],
         },
       ],
+      skippedColumns: [],
     }
 
     const provider = introspectionMetadataProvider('mydb', 'postgres', result)
@@ -112,14 +113,14 @@ describe('introspectionMetadataProvider', () => {
   })
 
   it('returns correct database entry', async () => {
-    const provider = introspectionMetadataProvider('pg1', 'postgres', { tables: [] })
+    const provider = introspectionMetadataProvider('pg1', 'postgres', { tables: [], skippedColumns: [] })
     const config = await provider.load()
 
     expect(config.databases).toEqual([{ id: 'pg1', engine: 'postgres' }])
   })
 
   it('handles empty tables', async () => {
-    const provider = introspectionMetadataProvider('empty', 'clickhouse', { tables: [] })
+    const provider = introspectionMetadataProvider('empty', 'clickhouse', { tables: [], skippedColumns: [] })
     const config = await provider.load()
 
     expect(config.tables).toEqual([])
@@ -132,6 +133,7 @@ describe('introspectionMetadataProvider', () => {
       tables: [
         { id: 'users', apiName: 'users', physicalName: 'public.users', columns: [], primaryKey: ['id'], relations: [] },
       ],
+      skippedColumns: [],
     }
     const tablesBefore = [...original.tables]
 
@@ -155,6 +157,7 @@ describe('introspectionMetadataProvider', () => {
           relations: [rel],
         },
       ],
+      skippedColumns: [],
     }
 
     const provider = introspectionMetadataProvider('db', 'postgres', result)

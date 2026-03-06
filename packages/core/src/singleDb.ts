@@ -1,4 +1,4 @@
-import type { DatabaseEngine, RoleMeta } from '@mkven/multi-db-validation'
+import type { DatabaseEngine, RoleMeta, TableMeta } from '@mkven/multi-db-validation'
 import { staticMetadata, staticRoles } from './metadata/providers.js'
 import type { MultiDb } from './pipeline.js'
 import { createMultiDb } from './pipeline.js'
@@ -10,16 +10,11 @@ import type { DbExecutor } from './types/interfaces.js'
  * Table definition for single-database setup.
  *
  * Same shape as `TableMeta` but without `database` — it is inferred
- * from the single database you provide.
+ * from the single database you provide. Also matches
+ * `IntrospectResult['tables'][number]`, so introspection results
+ * can be passed directly.
  */
-export interface SingleDbTable {
-  id: string
-  apiName: string
-  physicalName: string
-  columns: import('@mkven/multi-db-validation').ColumnMeta[]
-  primaryKey: string[]
-  relations: import('@mkven/multi-db-validation').RelationMeta[]
-}
+export type SingleDbTable = Omit<TableMeta, 'database'>
 
 export interface CreateSingleDbOptions {
   /** Logical database identifier (e.g. `'main'`). */

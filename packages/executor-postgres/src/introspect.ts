@@ -227,6 +227,7 @@ export async function introspectPostgres(options: IntrospectPostgresOptions): Pr
 
     // Map to IntrospectResult
     const tables: IntrospectResult['tables'] = []
+    const skippedColumns: string[] = []
 
     // Build a lookup from physicalName → apiName for FK resolution
     const tableApiNames = new Map<string, string>()
@@ -244,7 +245,10 @@ export async function introspectPostgres(options: IntrospectPostgresOptions): Pr
         const pgType = col.is_array ? col.udt_name.replace(/^_/, '') : col.data_type.toLowerCase()
         const colType = mapPgType(pgType, col.is_array)
 
-        if (colType === undefined) continue
+        if (colType === undefined) {
+          skippedColumns.push(`${entry.schema}.${entry.table}.${col.column_name} (${col.data_type})`)
+          continue
+        }
 
         columns.push({
           apiName: mapName(col.column_name),
@@ -281,7 +285,7 @@ export async function introspectPostgres(options: IntrospectPostgresOptions): Pr
       })
     }
 
-    return { tables }
+    return { tables, skippedColumns }
   } finally {
     await pool.end()
   }

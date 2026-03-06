@@ -41,6 +41,14 @@ export interface IntrospectOptions {
  */
 export interface IntrospectResult {
   tables: Omit<TableMeta, 'database'>[]
+  /**
+   * Columns that were discovered but skipped because their database
+   * type has no matching `ColumnType` (e.g. `json`, `bytea`, `interval`).
+   *
+   * Each entry is `"schema.table.column (pgType)"`.
+   * Empty when every column was mapped successfully.
+   */
+  skippedColumns: string[]
 }
 
 // ── Name mapping helpers ───────────────────────────────────────

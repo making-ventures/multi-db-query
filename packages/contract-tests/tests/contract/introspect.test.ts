@@ -97,6 +97,20 @@ describe('introspectPostgres', () => {
     expect(orders).toBeUndefined()
   })
 
+  it('reports skipped columns with unmapped types', async () => {
+    const result = await introspectPostgres({
+      connection: { connectionString: PG_URL },
+      schemas: ['public'],
+    })
+
+    // skippedColumns should be an array (may be empty if all types are mapped)
+    expect(Array.isArray(result.skippedColumns)).toBe(true)
+    // Each entry should include table and column info
+    for (const entry of result.skippedColumns) {
+      expect(entry).toMatch(/^\w+\.\w+\.\w+ \(.+\)$/)
+    }
+  })
+
   it('preserves names when apiNameMapper is "preserve"', async () => {
     const result = await introspectPostgres({
       connection: { connectionString: PG_URL },
